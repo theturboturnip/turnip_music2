@@ -23,10 +23,14 @@ struct LibraryContext {
     root_path: PathBuf,
     config: user_defined::ConfigFile,
 
-    cache: ,
+    cache: Box<dyn LibraryMetaCache>,
 
     album_groups: Vec<AlbumGroup>,
     compilation_groups: Vec<CompilationGroup>,
+}
+
+trait LibraryMetaCache {
+    
 }
 
 struct AlbumGroup {

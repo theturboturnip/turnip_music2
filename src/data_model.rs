@@ -94,26 +94,31 @@ pub mod user_defined {
         /// e.g. \['mp3', 'flac'\]
         pub ext_filters: Vec<String>,
     }
-    
+
+    #[derive(Serialize, Deserialize, Debug)]
+    #[serde(tag = "type")]
     pub enum GroupFile {
-        Compilation(CompilationInputGroup),
-        Album(AlbumInputGroup),
+        Compilation {
+            origin: Origin,
+            scan_filter: Option<ScanFilter>,
+            title: String,
+            songs: Vec<CompilationInputSongOverride>,
+        },
+        Album {
+            origin: Origin,
+            scan_filter: Option<ScanFilter>,
+            album_art_rel_path: Option<String>,
+            override_metadata: Option<metadata::album::Override>,
+            songs: Vec<AlbumInputSongOverride>,
+        }
     }
     impl GroupFile {
         pub fn scan_filter(&self) -> Option<&ScanFilter> {
             match self {
-                GroupFile::Compilation(input) => input.scan_filter.as_ref(),
-                GroupFile::Album(input) => input.scan_filter.as_ref(),
+                GroupFile::Compilation { scan_filter, .. } => scan_filter.as_ref(),
+                GroupFile::Album { scan_filter, .. } => scan_filter.as_ref(),
             }
         }
-    }
-
-    #[derive(Serialize, Deserialize, Debug)]
-    pub struct CompilationInputGroup {
-        pub origin: Origin,
-        pub scan_filter: Option<ScanFilter>,
-        pub title: String,
-        pub songs: Vec<CompilationInputSongOverride>,
     }
 
     #[derive(Serialize, Deserialize, Debug)]
@@ -122,15 +127,6 @@ pub mod user_defined {
         pub origin_mbid: Option<MbId>,
         pub override_metadata: Option<metadata::song::Override>,
         pub override_position: Option<u64>,
-    }
-
-    #[derive(Serialize, Deserialize, Debug)]
-    pub struct AlbumInputGroup {
-        pub origin: Origin,
-        pub scan_filter: Option<ScanFilter>,
-        pub album_art_rel_path: Option<String>,
-        pub override_metadata: Option<metadata::album::Override>,
-        pub songs: Vec<AlbumInputSongOverride>,
     }
 
     #[derive(Serialize, Deserialize, Debug)]
