@@ -25,8 +25,20 @@ struct LibraryContext {
 
     cache: ,
 
-    album_groups: Vec<AlbumInputGroup>,
-    compilation_groups: Vec<CompilationInputGroup>,
+    album_groups: Vec<AlbumGroup>,
+    compilation_groups: Vec<CompilationGroup>,
+}
+
+struct AlbumGroup {
+    path: PathBuf,
+    document: toml_edit::DocumentMut,
+    data: AlbumInputGroup,
+}
+
+struct CompilationGroup {
+    path: PathBuf,
+    document: toml_edit::DocumentMut,
+    data: CompilationInputGroup,
 }
 
 impl LibraryContext {

@@ -47,29 +47,38 @@
 //!     - Can just delete old ones and remake, no point in doing sensitivity there?
 //!     - Compilations retain the same track ordering as alphanumeric input file sorting, so ordered compilations can be created if desired but otherwise do not matter.
 
+use serde::{Deserialize, Serialize};
+
 /// MusicBrainz ID <https://musicbrainz.org/doc/MusicBrainz_Identifier>,
 /// which can be for one of many different kinds of [entities](https://musicbrainz.org/doc/MusicBrainz_Entity)
+#[derive(Serialize, Deserialize, Debug)]
 struct MbId(String);
 /// https://musicbrainz.org/doc/Disc_ID
+#[derive(Serialize, Deserialize, Debug)]
 struct MbDiscId(String);
 /// https://en.wikipedia.org/wiki/CDDB#Example_calculation_of_a_CDDB1_(FreeDB)_disc_ID
+#[derive(Serialize, Deserialize, Debug)]
 struct CddbDiscId(String);
 
 /// Data types defining the user-controlled TOML files
 pub mod user_defined {
+    use serde::{Deserialize, Serialize};
     use crate::data_model::{CddbDiscId, MbDiscId, MbId, metadata};
 
+    #[derive(Serialize, Deserialize, Debug)]
     pub struct ConfigFile {
         pub search_paths: Vec<String>,
         pub artist_name_overrides: Vec<ConfigArtistNameOverride>,
     }
 
+    #[derive(Serialize, Deserialize, Debug)]
     pub struct ConfigArtistNameOverride {
         pub artist_id: MbId,
         pub artist_name: String,
     }
     
     /// A set of concrete sources for metadata, controlled by the user, that are never discarded.
+    #[derive(Serialize, Deserialize, Debug)]
     pub struct Origin {
         pub url: Option<String>,
         pub mb_release_group_id: Option<MbId>,
@@ -80,6 +89,7 @@ pub mod user_defined {
 
     /// A filter for the files to actually scan and use ---
     /// in case of icky input directories with different copies of the same music
+    #[derive(Serialize, Deserialize, Debug)]
     pub struct ScanFilter {
         /// e.g. \['mp3', 'flac'\]
         pub ext_filters: Vec<String>,
@@ -98,6 +108,7 @@ pub mod user_defined {
         }
     }
 
+    #[derive(Serialize, Deserialize, Debug)]
     pub struct CompilationInputGroup {
         pub origin: Origin,
         pub scan_filter: Option<ScanFilter>,
@@ -105,6 +116,7 @@ pub mod user_defined {
         pub songs: Vec<CompilationInputSongOverride>,
     }
 
+    #[derive(Serialize, Deserialize, Debug)]
     pub struct CompilationInputSongOverride {
         pub file_rel_path: String,
         pub origin_mbid: Option<MbId>,
@@ -112,6 +124,7 @@ pub mod user_defined {
         pub override_position: Option<u64>,
     }
 
+    #[derive(Serialize, Deserialize, Debug)]
     pub struct AlbumInputGroup {
         pub origin: Origin,
         pub scan_filter: Option<ScanFilter>,
@@ -120,6 +133,7 @@ pub mod user_defined {
         pub songs: Vec<AlbumInputSongOverride>,
     }
 
+    #[derive(Serialize, Deserialize, Debug)]
     pub struct AlbumInputSongOverride {
         pub file_rel_path: String,
         pub override_metadata: Option<metadata::song::Override>,
@@ -138,8 +152,10 @@ pub mod metadata {
     }
 
     pub mod song {
+        use serde::{Deserialize, Serialize};
         use super::CachedArtist;
 
+        #[derive(Serialize, Deserialize, Debug)]
         pub struct Override {
             song_title: Option<String>,
             song_artists: Option<Vec<String>>,
@@ -156,6 +172,7 @@ pub mod metadata {
         }
     }
     pub mod album {
+        use serde::{Deserialize, Serialize};
         use crate::data_model::MbId;
         use super::CachedArtist;
 
@@ -166,6 +183,7 @@ pub mod metadata {
             mb_release_media_idx: Option<u64>,
         }
 
+        #[derive(Serialize, Deserialize, Debug)]
         pub struct Override {
             album_title: Option<String>,
             album_artists: Option<Vec<String>>,
