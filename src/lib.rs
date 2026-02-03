@@ -1,17 +1,16 @@
-use std::collections::HashSet;
+use crate::data_model::{
+    AlbumInputGroup, CompilationInputGroup, CompilationInputSong, metadata, user_defined,
+};
+use async_trait::async_trait;
+use std::collections::{HashMap, HashSet};
 use std::ffi::{OsStr, OsString};
-use std::path::PathBuf;
-use crate::data_model::{user_defined, AlbumInputGroup, CompilationInputGroup};
+use std::path::{Path, PathBuf};
 
 mod data_model;
 
 const GROUP_FILE_NAME: &'static str = "music.tm2.toml";
 const DEFAULT_MUSIC_EXTS: [&'static str; 6] = [
-    "mp3",
-    "ogg",
-    "flac",
-    "wav",
-    "aiff",
+    "mp3", "ogg", "flac", "wav", "aiff",
     "m4a",
     // TODO m4b support one day? requires general splitting-big-file support.
 ];
@@ -19,35 +18,100 @@ const DEFAULT_MUSIC_EXTS: [&'static str; 6] = [
 // TODO need input file metadata parsing using rust-metaflac for FLAC and mp4ameta for m4as and id3 for others
 // see docs for each crate
 
-struct LibraryContext {
+pub struct LibraryGatherer {
     root_path: PathBuf,
     config: user_defined::ConfigFile,
-
-    cache: Box<dyn LibraryMetaCache>,
 
     album_groups: Vec<AlbumGroup>,
     compilation_groups: Vec<CompilationGroup>,
 }
 
-trait LibraryMetaCache {
-    
+pub struct LibraryMetadataApplier {
+    root_path: PathBuf,
+    config: user_defined::ConfigFile,
+
+    album_groups: Vec<AlbumGroup>,
+    compilation_groups: Vec<CompilationGroup>,
+
+    deriver: Box<dyn MetadataDeriver>,
+    // output_lib: ?,
+}
+
+/// TODO all of the things here need to timestamp their derived metadata sources and cached metadatas,
+/// or include hashes of the input data, or something
+#[async_trait]
+pub trait MetadataDeriver {
+    /// Retrieve a stored derived-metadata-source for a given Album if one exists
+    fn get_derived_album(
+        &self,
+        album_path: &Path,
+    ) -> Option<metadata::album::DerivedMetadataSource> {
+        None
+    }
+    /// Figure out the derived metadata for the Album and its Songs
+    /// e.g. take the origin MBID and pass it through, or take the origin CDDB ID and best-effort look up what it is
+    async fn try_rederive_album(
+        &mut self,
+        album: &AlbumInputGroup,
+    ) -> Option<metadata::album::DerivedMetadataSource> {
+        None
+    }
+    /// After finding a derived-metadata-source for an album, look up if we have cached metadata for it
+    fn get_cached_album(
+        &self,
+        src: metadata::album::DerivedMetadataSource,
+    ) -> Option<metadata::album::Cached> {
+        None
+    }
+    /// Using a derived-metadata-source for an album, re-lookup the metadata
+    async fn try_recache_album(
+        &mut self,
+        src: metadata::album::DerivedMetadataSource,
+    ) -> Option<metadata::album::Cached> {
+        None
+    }
+
+    fn get_derived_compilation_song(
+        &self,
+        song_path: &Path,
+    ) -> Option<metadata::song::CompilationDerivedMetadataSource> {
+        None
+    }
+    async fn try_rederive_compilation_song(
+        &mut self,
+        song_path: &Path,
+    ) -> Option<metadata::song::CompilationDerivedMetadataSource> {
+        None
+    }
+    fn get_cached_compilation_song(
+        &self,
+        src: metadata::song::CompilationDerivedMetadataSource,
+    ) -> Option<metadata::song::Cached> {
+        None
+    }
+    async fn try_recache_compilation_song(
+        &self,
+        src: metadata::song::CompilationDerivedMetadataSource,
+    ) -> Option<metadata::song::Cached> {
+        None
+    }
 }
 
 struct AlbumGroup {
     path: PathBuf,
-    document: toml_edit::DocumentMut,
+    // document: toml_edit::DocumentMut,
     data: AlbumInputGroup,
 }
 
 struct CompilationGroup {
     path: PathBuf,
-    document: toml_edit::DocumentMut,
+    // document: toml_edit::DocumentMut,
     data: CompilationInputGroup,
 }
 
-impl LibraryContext {
-    fn scan_library(&mut self) -> anyhow::Result<()> {
-        let mut scan_stack = vec![self.root_path];
+impl LibraryGatherer {
+    pub fn scan_library(&mut self) -> anyhow::Result<()> {
+        let mut scan_stack = vec![self.root_path.clone()];
         let group_file_name = OsStr::new(GROUP_FILE_NAME);
 
         while let Some(dir) = scan_stack.pop() {
@@ -63,15 +127,15 @@ impl LibraryContext {
                     dirs.push(path);
                 } else if path.is_file() {
                     if path.file_name() == Some(group_file_name) {
-                        group = Some(user_defined::GroupFile::from_file(path)?);
+                        group = Some((user_defined::GroupFile::from_file(&path)?, path));
                     } else {
                         files.push(path);
                     }
                 }
             }
 
-            if let Some(group) = group {
-                self.scan_group(group, dirs, files)?;
+            if let Some((group, path)) = group {
+                self.scan_group(path, group, dirs, files)?;
             } else {
                 scan_stack.extend(dirs);
             }
@@ -80,13 +144,19 @@ impl LibraryContext {
         Ok(())
     }
 
-    fn scan_group(&mut self, group: user_defined::GroupFile, root_dirs: Vec<PathBuf>, root_files: Vec<PathBuf>) -> anyhow::Result<()> {
+    fn scan_group(
+        &mut self,
+        root_path: PathBuf,
+        group: user_defined::GroupFile,
+        root_dirs: Vec<PathBuf>,
+        root_files: Vec<PathBuf>,
+    ) -> anyhow::Result<()> {
         let mut scan_stack = root_dirs;
         // TODO have to include path-relative-to-root_dirs
         let mut music_files: Vec<PathBuf> = vec![];
         let scan_exts: HashSet<OsString> = group.scan_filter().map_or_else(
             || DEFAULT_MUSIC_EXTS.iter().map(|s| s.into()).collect(),
-            |scan_filter| scan_filter.ext_filters.iter().map(|s| s.into()).collect()
+            |scan_filter| scan_filter.ext_filters.iter().map(|s| s.into()).collect(),
         );
 
         for path in root_files {
@@ -112,10 +182,37 @@ impl LibraryContext {
                     }
                 }
             }
-
         }
 
-        todo!("Actually process these as per data_model documentation. Don't call out to MusicBrainz yet, save that for later");
+        // Build up the
+
+        match group {
+            user_defined::GroupFile::Compilation {
+                origin,
+                scan_filter,
+                title,
+                songs,
+            } => {
+                self.compilation_groups.push(CompilationGroup {
+                    data: CompilationInputGroup::new(
+                        &root_path,
+                        origin,
+                        scan_filter,
+                        title,
+                        songs,
+                        music_files,
+                    ),
+                    path: root_path,
+                });
+            }
+            user_defined::GroupFile::Album {
+                origin,
+                scan_filter,
+                album_art_rel_path,
+                override_metadata,
+                songs,
+            } => {}
+        }
 
         Ok(())
     }

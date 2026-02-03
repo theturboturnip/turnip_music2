@@ -13,8 +13,8 @@
 //!    - a cache of the derived metadata source, found automatically from the Origin;
 //!    - a cache of the actual metadata extracted from that source for each song;
 //! - Source Music files, stored inside folders (recursive search) containing Group Metadata files.
-//! 
-//! Loading a library consists of 
+//!
+//! Loading a library consists of
 //! - Gathering all the Groups you can find
 //! - Within those Groups, scanning for relevant Songs
 //! - Searching for any missing metadata
@@ -47,23 +47,35 @@
 //!     - Can just delete old ones and remake, no point in doing sensitivity there?
 //!     - Compilations retain the same track ordering as alphanumeric input file sorting, so ordered compilations can be created if desired but otherwise do not matter.
 
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
+
+use chromaprint::ChromaprintAlgorithm;
 use serde::{Deserialize, Serialize};
+
+use crate::data_model::user_defined::{CompilationInputSongOverride, Origin, ScanFilter};
 
 /// MusicBrainz ID <https://musicbrainz.org/doc/MusicBrainz_Identifier>,
 /// which can be for one of many different kinds of [entities](https://musicbrainz.org/doc/MusicBrainz_Entity)
 #[derive(Serialize, Deserialize, Debug)]
-struct MbId(String);
+pub struct MbId(String);
 /// https://musicbrainz.org/doc/Disc_ID
 #[derive(Serialize, Deserialize, Debug)]
-struct MbDiscId(String);
+pub struct MbDiscId(String);
 /// https://en.wikipedia.org/wiki/CDDB#Example_calculation_of_a_CDDB1_(FreeDB)_disc_ID
 #[derive(Serialize, Deserialize, Debug)]
-struct CddbDiscId(String);
+pub struct CddbDiscId(String);
+
+/// Song audio fingerprint via chromaprint, which allows lookup via MusicBrainz
+pub struct Chromaprint(ChromaprintAlgorithm, Vec<u8>);
 
 /// Data types defining the user-controlled TOML files
 pub mod user_defined {
-    use serde::{Deserialize, Serialize};
     use crate::data_model::{CddbDiscId, MbDiscId, MbId, metadata};
+    use serde::{Deserialize, Serialize};
+    use std::path::Path;
 
     #[derive(Serialize, Deserialize, Debug)]
     pub struct ConfigFile {
@@ -76,7 +88,7 @@ pub mod user_defined {
         pub artist_id: MbId,
         pub artist_name: String,
     }
-    
+
     /// A set of concrete sources for metadata, controlled by the user, that are never discarded.
     #[derive(Serialize, Deserialize, Debug)]
     pub struct Origin {
@@ -110,9 +122,15 @@ pub mod user_defined {
             album_art_rel_path: Option<String>,
             override_metadata: Option<metadata::album::Override>,
             songs: Vec<AlbumInputSongOverride>,
-        }
+        },
     }
     impl GroupFile {
+        pub fn from_file(p: &Path) -> anyhow::Result<GroupFile> {
+            let document = std::fs::read_to_string(p)?.parse::<toml_edit::DocumentMut>()?;
+            let file = toml_edit::de::from_document(document)?;
+            Ok(file)
+        }
+
         pub fn scan_filter(&self) -> Option<&ScanFilter> {
             match self {
                 GroupFile::Compilation { scan_filter, .. } => scan_filter.as_ref(),
@@ -126,7 +144,7 @@ pub mod user_defined {
         pub file_rel_path: String,
         pub origin_mbid: Option<MbId>,
         pub override_metadata: Option<metadata::song::Override>,
-        pub override_position: Option<u64>,
+        pub override_position: Option<usize>,
     }
 
     #[derive(Serialize, Deserialize, Debug)]
@@ -148,56 +166,69 @@ pub mod metadata {
     }
 
     pub mod song {
-        use serde::{Deserialize, Serialize};
         use super::CachedArtist;
+        use crate::data_model::{Chromaprint, MbId};
+        use serde::{Deserialize, Serialize};
+
+        /// Derived by the tool from the Origin and other metadata and cached as an association with each group.
+        pub struct CompilationDerivedMetadataSource {
+            pub chromaprint: Option<Chromaprint>,
+            pub mb_recording_id: Option<MbId>,
+        }
 
         #[derive(Serialize, Deserialize, Debug)]
         pub struct Override {
-            song_title: Option<String>,
-            song_artists: Option<Vec<String>>,
+            pub song_title: Option<String>,
+            pub song_artists: Option<Vec<String>>,
         }
 
         pub struct Cached {
-            song_title: String,
-            song_artists: Vec<CachedArtist>,
+            pub song_title: String,
+            pub song_artists: Vec<CachedArtist>,
         }
 
         pub struct Output {
-            song_title: String,
-            song_artists: Vec<String>,
+            pub song_title: String,
+            pub song_artists: Vec<String>,
         }
     }
     pub mod album {
-        use serde::{Deserialize, Serialize};
-        use crate::data_model::MbId;
         use super::CachedArtist;
+        use crate::data_model::{Chromaprint, MbId};
+        use serde::{Deserialize, Serialize};
 
+        /// Derived by the tool from the Origin and other metadata and cached as an association with each group.
         pub struct DerivedMetadataSource {
-            mb_release_group_id: Option<MbId>,
-            mb_release_id: Option<MbId>,
-            /// for e.g. a single disc in a larger album
-            mb_release_media_idx: Option<u64>,
+            pub mb_release_group_and_release_ids: Option<(MbId, MbId)>,
+            pub derived_songs: Vec<SongDerivedMetadataSource>,
+        }
+
+        pub struct SongDerivedMetadataSource {
+            pub chromaprint: Option<Chromaprint>,
+            pub media_track_idxs: Option<(i64, i64)>,
+            // pub track_idx: i64,
         }
 
         #[derive(Serialize, Deserialize, Debug)]
         pub struct Override {
-            album_title: Option<String>,
-            album_artists: Option<Vec<String>>,
+            pub album_title: Option<String>,
+            pub album_artists: Option<Vec<String>>,
         }
 
         pub struct Cached {
-            title: String,
-            artists: Vec<CachedArtist>,
+            pub title: String,
+            pub artists: Vec<CachedArtist>,
         }
     }
 }
 
-struct FileId {
-    /// '/' coded path relative to the library config TOML file being read, NOT to the group TOML file.
-    path: String,
-    /// Base64 encoded SHA256 digest of the file, used for integrity checks
-    hash: String,
-}
+// struct FileId {
+//     /// '/' coded path relative to the library config TOML file being read, NOT to the group TOML file.
+//     pub path: String,
+//     /// Base64 encoded SHA256 digest of the file, used for integrity checks
+//     pub hash: String,
+// }
+type FileId = PathBuf;
 
 pub struct CompilationInputGroup {
     origin: user_defined::Origin,
@@ -205,12 +236,110 @@ pub struct CompilationInputGroup {
     title: String,
     song_files: Vec<CompilationInputSong>,
 }
+impl CompilationInputGroup {
+    pub fn new(
+        path: &Path,
+
+        origin: Origin,
+        scan_filter: Option<ScanFilter>,
+        title: String,
+        songs: Vec<CompilationInputSongOverride>,
+
+        non_rel_song_paths: Vec<PathBuf>,
+    ) -> Self {
+        // sort music_files by path alphanumeric descending, this is the first step of the ordering.
+        let mut rel_song_paths = non_rel_song_paths
+            .into_iter()
+            .map(|p| {
+                p.strip_prefix(path)
+                    .expect("non_rel_song_paths had a path that wasn't prefixed with the parent")
+                    .to_owned()
+            })
+            .collect::<Vec<_>>();
+        rel_song_paths.sort();
+
+        // Build a set of song information for all songs scanned
+        let mut mapping = HashMap::new();
+        for p in rel_song_paths.iter() {
+            mapping.insert(
+                p.clone(),
+                CompilationInputSong {
+                    file: p.clone(),
+                    origin_mbid: None,
+                    override_metadata: None,
+                    derived_metadata_src: None,
+                    cached_metadata: None,
+                },
+            );
+        }
+
+        if mapping.len() != rel_song_paths.len() {
+            panic!("rel_song_paths had duplicates");
+        }
+
+        // For each override:
+        for s in songs {
+            let mut path = PathBuf::new();
+            path.push(s.file_rel_path);
+
+            // - apply the reordering if present. we want to apply the reorderings in file order so it makes sense to the user.
+            // TODO does this make sense or is it just confusing? it will be stable but if the user asks for "z is 5, y is 4, x is 3" they will/will not get the exact indices they want
+            match s.override_position {
+                Some(override_pos) => {
+                    let existing_pos = rel_song_paths.iter().position(|p| p.as_os_str() == path.as_os_str()).expect("CompilationInputGroup file contained an override for a file that isn't in the compilation");
+                    // if we need to, reorder by shifting things up and down.
+                    if existing_pos < override_pos {
+                        (&mut rel_song_paths[existing_pos..=override_pos]).rotate_left(1);
+                    } else if existing_pos > override_pos {
+                        (&mut rel_song_paths[override_pos..=existing_pos]).rotate_right(1);
+                    }
+                }
+                None => {}
+            };
+
+            // - update the mapping with the override information
+            let s_mapping = mapping.get_mut(&path);
+            match s_mapping {
+                None => panic!(
+                    "CompilationInputGroup referred to song {:?} not present",
+                    path
+                ),
+                Some(s_mapping) => {
+                    // Merge in the data from the mapping
+                    // TODO how to handle partial metadata? Maybe disable merging?
+                    if s.origin_mbid.is_some() {
+                        s_mapping.origin_mbid = s.origin_mbid;
+                    }
+                    if s.override_metadata.is_some() {
+                        s_mapping.override_metadata = s.override_metadata;
+                    }
+                }
+            }
+        }
+
+        // pull the data out of the mapping, ordered by the final ordering of rel_song_paths
+        CompilationInputGroup {
+            origin,
+            scan_filter,
+            title,
+            song_files: rel_song_paths
+                .into_iter()
+                .map(|p| {
+                    mapping
+                        .remove(&p)
+                        .expect("Removing from a list that was populated with mapping")
+                })
+                .collect(),
+        }
+    }
+}
 
 pub struct CompilationInputSong {
     file: FileId,
     origin_mbid: Option<MbId>,
     override_metadata: Option<metadata::song::Override>,
 
+    derived_metadata_src: Option<metadata::song::CompilationDerivedMetadataSource>,
     cached_metadata: Option<metadata::song::Cached>,
 }
 
@@ -222,19 +351,12 @@ pub struct AlbumInputGroup {
 
     song_files: Vec<AlbumInputSong>,
 
-    derived_metadata_src: Option<metadata::album::DerivedMetadataSource>,
-    cached_metadata: Option<metadata::album::Cached>,
+    derived_metadata: Option<metadata::album::DerivedMetadataSource>,
+    cached_metadata: Option<(metadata::album::Cached, Vec<metadata::song::Cached>)>,
 }
-
 pub struct AlbumInputSong {
     file: FileId,
     override_metadata: Option<metadata::song::Override>,
     disc_idx: u64,
     track_idx: u64,
-
-    derived_mbid: Option<MbId>,
-    cached_metadata: Option<metadata::song::Cached>,
 }
-
-
-
