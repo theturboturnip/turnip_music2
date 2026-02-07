@@ -48,7 +48,7 @@
 //!     - Compilations retain the same track ordering as alphanumeric input file sorting, so ordered compilations can be created if desired but otherwise do not matter.
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
 };
 
@@ -57,7 +57,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::data_model::{
     native_metadata::{NativeMetadata, NativeMetadataFormat},
-    user_defined::{CompilationInputSongOverride, Origin, ScanFilter},
+    user_defined::{AlbumInputSongOverride, CompilationInputSongOverride, Origin, ScanFilter},
 };
 
 /// MusicBrainz ID <https://musicbrainz.org/doc/MusicBrainz_Identifier>,
@@ -216,6 +216,8 @@ pub mod metadata {
         pub struct Override {
             pub album_title: Option<String>,
             pub album_artists: Option<Vec<String>>,
+            pub fixed_disc_idx: Option<u64>,
+            pub offset_track_idx: Option<i64>,
         }
 
         pub struct Cached {
@@ -251,6 +253,7 @@ pub struct CompilationInputSong {
     cached_metadata: Option<metadata::song::Cached>,
     native_metadata: NativeMetadata,
 }
+
 impl CompilationInputGroup {
     pub fn new(
         path: &Path,
@@ -284,6 +287,9 @@ impl CompilationInputGroup {
                     .expect("non_rel_song_paths had a path that wasn't prefixed with the parent")
                     .to_owned())
             })
+            // uniquify
+            .collect::<HashSet<_>>()
+            .into_iter()
             .collect::<Vec<_>>();
         rel_song_paths.sort();
 
@@ -352,7 +358,7 @@ pub struct AlbumInputGroup {
     origin: user_defined::Origin,
     override_metadata: Option<metadata::album::Override>,
     scan_filter: Option<user_defined::ScanFilter>,
-    album_art: FileId,
+    album_art: Option<FileId>,
 
     song_files: Vec<AlbumInputSong>,
 
@@ -364,7 +370,121 @@ pub struct AlbumInputSong {
     override_metadata: Option<metadata::song::Override>,
     native_metadata: NativeMetadata,
 
-    final_disc_idx: u64,
-    final_track_idx: u64,
+    adjusted_disc_idx: u64,
+    adjusted_track_idx: u64,
 }
-impl AlbumInputGroup {}
+impl AlbumInputGroup {
+    pub fn new(
+        path: &Path,
+
+        origin: Origin,
+        override_metadata: Option<metadata::album::Override>,
+        scan_filter: Option<ScanFilter>,
+        album_art: Option<String>,
+        songs: Vec<AlbumInputSongOverride>,
+
+        non_rel_song_paths: Vec<PathBuf>,
+    ) -> Self {
+        // Build a set of song information for all songs scanned
+        let mut override_mapping = HashMap::new();
+
+        for s in songs {
+            let mut path = PathBuf::new();
+            path.push(&s.file_rel_path);
+
+            // - update the mapping with the override information
+            let s_mapping = override_mapping.get_mut(&path);
+            match s_mapping {
+                None => {
+                    override_mapping.insert(path, s);
+                }
+                Some(s_mapping) => {
+                    // Merge in the data from the mapping
+                    // TODO how to handle partial metadata? Maybe disable merging?
+                    if s.override_metadata.is_some() {
+                        s_mapping.override_metadata = s.override_metadata;
+                    }
+                    if s.override_disc_idx.is_some() {
+                        s_mapping.override_disc_idx = s.override_disc_idx;
+                    }
+                    if s.override_track_idx.is_some() {
+                        s_mapping.override_track_idx = s.override_track_idx;
+                    }
+                }
+            }
+        }
+
+        let mut native_metadata_mapping = HashMap::new();
+
+        // sort music_files by path alphanumeric descending, this is the first step of the ordering.
+        // at the same time, build a mapping for the native metadata
+        let mut rel_song_paths = non_rel_song_paths
+            .into_iter()
+            .map(|p| {
+                let unprefixed_p = p
+                    .strip_prefix(path)
+                    .expect("non_rel_song_paths had a path that wasn't prefixed with the parent")
+                    .to_owned();
+                native_metadata_mapping.insert(
+                    unprefixed_p.clone(),
+                    NativeMetadataFormat::parse_from_file(&p).unwrap_or_default(), // TODO log errors
+                );
+                unprefixed_p
+            })
+            // uniquify
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        rel_song_paths.sort();
+
+        // For each override:
+        let mut adjusted_disc_idx = 1;
+        let mut adjusted_track_idx = 0;
+        let song_files = rel_song_paths
+            .into_iter()
+            .map(|r| {
+                adjusted_track_idx += 1;
+                let override_metadata = match override_mapping.remove(&r) {
+                    Some(s) => {
+                        if let Some(d) = s.override_disc_idx {
+                            adjusted_disc_idx = d;
+                        }
+                        if let Some(t) = s.override_track_idx {
+                            adjusted_track_idx = t;
+                        }
+                        s.override_metadata
+                    }
+                    None => None,
+                };
+                let native_metadata = native_metadata_mapping
+                    .remove(&r)
+                    .expect("This must have been built, we know rel_song_paths doesn't have dupes");
+                AlbumInputSong {
+                    file: r,
+                    override_metadata,
+                    native_metadata,
+                    adjusted_disc_idx,
+                    adjusted_track_idx,
+                }
+            })
+            .collect();
+
+        if override_mapping.len() > 0 {
+            panic!(
+                "Overrode some songs that weren't found: {:?}",
+                override_mapping
+            );
+        }
+
+        // pull the data out of the mapping, ordered by the final ordering of rel_song_paths
+        AlbumInputGroup {
+            origin,
+            override_metadata,
+            scan_filter,
+            album_art: album_art.map(|s| s.into()),
+            song_files,
+            derived_metadata: None,
+            cached_metadata: None,
+        }
+    }
+}

@@ -11,7 +11,6 @@ mod data_model;
 
 const GROUP_FILE_NAME: &'static str = "music.tm2.toml";
 
-// TODO need input file metadata parsing using rust-metaflac for FLAC and mp4ameta for m4as and id3 for others
 // see docs for each crate
 
 pub struct LibraryGatherer {
@@ -180,7 +179,7 @@ impl LibraryGatherer {
             }
         }
 
-        // Build up the
+        // Build up the grups
 
         match group {
             user_defined::GroupFile::Compilation {
@@ -207,7 +206,20 @@ impl LibraryGatherer {
                 album_art_rel_path,
                 override_metadata,
                 songs,
-            } => {}
+            } => {
+                self.album_groups.push(AlbumGroup {
+                    data: AlbumInputGroup::new(
+                        &root_path,
+                        origin,
+                        override_metadata,
+                        scan_filter,
+                        album_art_rel_path,
+                        songs,
+                        music_files,
+                    ),
+                    path: root_path,
+                });
+            }
         }
 
         Ok(())
