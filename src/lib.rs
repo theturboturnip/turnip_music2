@@ -1,3 +1,4 @@
+use crate::data_model::native_metadata::NATIVE_MUSIC_EXTS;
 use crate::data_model::{
     AlbumInputGroup, CompilationInputGroup, CompilationInputSong, metadata, user_defined,
 };
@@ -9,11 +10,6 @@ use std::path::{Path, PathBuf};
 mod data_model;
 
 const GROUP_FILE_NAME: &'static str = "music.tm2.toml";
-const DEFAULT_MUSIC_EXTS: [&'static str; 6] = [
-    "mp3", "ogg", "flac", "wav", "aiff",
-    "m4a",
-    // TODO m4b support one day? requires general splitting-big-file support.
-];
 
 // TODO need input file metadata parsing using rust-metaflac for FLAC and mp4ameta for m4as and id3 for others
 // see docs for each crate
@@ -155,7 +151,7 @@ impl LibraryGatherer {
         // TODO have to include path-relative-to-root_dirs
         let mut music_files: Vec<PathBuf> = vec![];
         let scan_exts: HashSet<OsString> = group.scan_filter().map_or_else(
-            || DEFAULT_MUSIC_EXTS.iter().map(|s| s.into()).collect(),
+            || NATIVE_MUSIC_EXTS.iter().map(|s| s.into()).collect(),
             |scan_filter| scan_filter.ext_filters.iter().map(|s| s.into()).collect(),
         );
 
@@ -217,4 +213,3 @@ impl LibraryGatherer {
         Ok(())
     }
 }
-// Sta

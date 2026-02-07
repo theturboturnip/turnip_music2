@@ -55,7 +55,10 @@ use std::{
 use chromaprint::ChromaprintAlgorithm;
 use serde::{Deserialize, Serialize};
 
-use crate::data_model::user_defined::{CompilationInputSongOverride, Origin, ScanFilter};
+use crate::data_model::{
+    native_metadata::{NativeMetadata, NativeMetadataFormat},
+    user_defined::{CompilationInputSongOverride, Origin, ScanFilter},
+};
 
 /// MusicBrainz ID <https://musicbrainz.org/doc/MusicBrainz_Identifier>,
 /// which can be for one of many different kinds of [entities](https://musicbrainz.org/doc/MusicBrainz_Entity)
@@ -230,11 +233,23 @@ pub mod metadata {
 // }
 type FileId = PathBuf;
 
+pub mod native_metadata;
+
 pub struct CompilationInputGroup {
     origin: user_defined::Origin,
     scan_filter: Option<user_defined::ScanFilter>,
     title: String,
     song_files: Vec<CompilationInputSong>,
+}
+
+pub struct CompilationInputSong {
+    file: FileId,
+    origin_mbid: Option<MbId>,
+    override_metadata: Option<metadata::song::Override>,
+
+    derived_metadata_src: Option<metadata::song::CompilationDerivedMetadataSource>,
+    cached_metadata: Option<metadata::song::Cached>,
+    native_metadata: NativeMetadata,
 }
 impl CompilationInputGroup {
     pub fn new(
@@ -247,31 +262,30 @@ impl CompilationInputGroup {
 
         non_rel_song_paths: Vec<PathBuf>,
     ) -> Self {
+        // Build a set of song information for all songs scanned
+        let mut mapping = HashMap::new();
         // sort music_files by path alphanumeric descending, this is the first step of the ordering.
         let mut rel_song_paths = non_rel_song_paths
             .into_iter()
             .map(|p| {
-                p.strip_prefix(path)
+                mapping.insert(
+                    p.clone(),
+                    CompilationInputSong {
+                        file: p.clone(),
+                        origin_mbid: None,
+                        override_metadata: None,
+                        derived_metadata_src: None,
+                        cached_metadata: None,
+                        native_metadata: NativeMetadataFormat::parse_from_file(&p)
+                            .unwrap_or_default(), // TODO log errors
+                    },
+                );
+                (p.strip_prefix(path)
                     .expect("non_rel_song_paths had a path that wasn't prefixed with the parent")
-                    .to_owned()
+                    .to_owned())
             })
             .collect::<Vec<_>>();
         rel_song_paths.sort();
-
-        // Build a set of song information for all songs scanned
-        let mut mapping = HashMap::new();
-        for p in rel_song_paths.iter() {
-            mapping.insert(
-                p.clone(),
-                CompilationInputSong {
-                    file: p.clone(),
-                    origin_mbid: None,
-                    override_metadata: None,
-                    derived_metadata_src: None,
-                    cached_metadata: None,
-                },
-            );
-        }
 
         if mapping.len() != rel_song_paths.len() {
             panic!("rel_song_paths had duplicates");
@@ -334,15 +348,6 @@ impl CompilationInputGroup {
     }
 }
 
-pub struct CompilationInputSong {
-    file: FileId,
-    origin_mbid: Option<MbId>,
-    override_metadata: Option<metadata::song::Override>,
-
-    derived_metadata_src: Option<metadata::song::CompilationDerivedMetadataSource>,
-    cached_metadata: Option<metadata::song::Cached>,
-}
-
 pub struct AlbumInputGroup {
     origin: user_defined::Origin,
     override_metadata: Option<metadata::album::Override>,
@@ -357,6 +362,9 @@ pub struct AlbumInputGroup {
 pub struct AlbumInputSong {
     file: FileId,
     override_metadata: Option<metadata::song::Override>,
-    disc_idx: u64,
-    track_idx: u64,
+    native_metadata: NativeMetadata,
+
+    final_disc_idx: u64,
+    final_track_idx: u64,
 }
+impl AlbumInputGroup {}

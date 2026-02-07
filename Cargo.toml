@@ -7,7 +7,11 @@ edition = "2024"
 anyhow = "1.0.100"
 async-trait = "0.1.89"
 chromaprint = "0.2.0"
+id3 = "1.16.4"
+metaflac = "0.2.8"
+mp4ameta = "0.13.0"
 #discid = "0.7.0"
 musicbrainz_rs = "0.12.0"
+regex = "1.12.3"
 serde = { version = "1.0.228", features = ["derive"] }
 toml_edit = { version = "0.24.0+spec-1.1.0", features = ["serde"] }
