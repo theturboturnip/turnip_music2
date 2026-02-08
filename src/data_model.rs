@@ -55,20 +55,23 @@ use std::{
 use chromaprint::ChromaprintAlgorithm;
 use serde::{Deserialize, Serialize};
 
-use crate::data_model::{
-    native_metadata::{NativeMetadata, NativeMetadataFormat},
-    user_defined::{AlbumInputSongOverride, CompilationInputSongOverride, Origin, ScanFilter},
+use crate::{
+    data_model::{
+        native_metadata::{NativeMetadata, NativeMetadataFormat},
+        user_defined::{AlbumInputSongOverride, CompilationInputSongOverride, Origin, ScanFilter},
+    },
+    resolver::OutputGroupKey,
 };
 
 /// MusicBrainz ID <https://musicbrainz.org/doc/MusicBrainz_Identifier>,
 /// which can be for one of many different kinds of [entities](https://musicbrainz.org/doc/MusicBrainz_Entity)
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MbId(String);
 /// https://musicbrainz.org/doc/Disc_ID
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MbDiscId(String);
 /// https://en.wikipedia.org/wiki/CDDB#Example_calculation_of_a_CDDB1_(FreeDB)_disc_ID
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CddbDiscId(String);
 
 /// Song audio fingerprint via chromaprint, which allows lookup via MusicBrainz
@@ -374,6 +377,35 @@ pub struct AlbumInputSong {
     adjusted_track_idx: u64,
 }
 impl AlbumInputGroup {
+    pub fn computed_name(&self) -> Option<&String> {
+        // TODO fall back to individual song native_metadata
+        self.override_metadata
+            .as_ref()
+            .map(|o| o.album_title.as_ref())
+            .flatten()
+            .or_else(|| self.cached_metadata.as_ref().map(|c| &c.0.title))
+    }
+    pub fn computed_group_key(&self) -> Option<OutputGroupKey> {
+        self.origin
+            .mb_release_id
+            .as_ref()
+            .map(|id| OutputGroupKey::AlbumByMusicBrainz(id.clone()))
+            .or_else(|| {
+                self.derived_metadata
+                    .as_ref()
+                    .map(|d| {
+                        d.mb_release_group_and_release_ids
+                            .as_ref()
+                            .map(|(rg_id, r_id)| OutputGroupKey::AlbumByMusicBrainz(r_id.clone()))
+                    })
+                    .flatten()
+            })
+            .or_else(|| {
+                self.computed_name()
+                    .map(|s| OutputGroupKey::AlbumByName(s.clone()))
+            })
+    }
+
     pub fn new(
         path: &Path,
 
