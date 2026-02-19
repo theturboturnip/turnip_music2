@@ -7,7 +7,7 @@ const GROUP_FILE_NAME: &'static str = "music.tm2.toml";
 
 pub enum Group {
     PartialAlbum(AlbumInputGroup, PathBuf),
-    Compilation(CompilationInputGroup, PathBuf),
+    PartialCompilation(CompilationInputGroup, PathBuf),
 }
 
 pub fn scan_library(root_path: PathBuf) -> anyhow::Result<Vec<Group>> {
@@ -94,7 +94,7 @@ fn scan_group(
             scan_filter,
             title,
             songs,
-        } => Ok(Group::Compilation(
+        } => Ok(Group::PartialCompilation(
             CompilationInputGroup::new(&root_path, origin, scan_filter, title, songs, music_files),
             root_path,
         )),
