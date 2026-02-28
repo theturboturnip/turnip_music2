@@ -1,16 +1,16 @@
 use crate::data_model::native_metadata::NATIVE_MUSIC_EXTS;
 use crate::data_model::{AlbumInputGroup, CompilationInputGroup, user_defined};
+use crate::fs::Fs;
 use std::collections::HashSet;
 use std::ffi::{OsStr, OsString};
-use std::path::PathBuf;
 const GROUP_FILE_NAME: &'static str = "music.tm2.toml";
 
-pub enum Group {
-    PartialAlbum(AlbumInputGroup, PathBuf),
-    PartialCompilation(CompilationInputGroup, PathBuf),
+pub enum Group<F: Fs> {
+    PartialAlbum(AlbumInputGroup<F>, F::PathBuf),
+    PartialCompilation(CompilationInputGroup<F>, F::PathBuf),
 }
 
-pub fn scan_library(root_path: PathBuf) -> anyhow::Result<Vec<Group>> {
+pub fn scan_library<F: Fs>(fs: &F, root_path: F::PathBuf) -> anyhow::Result<Vec<Group<F>>> {
     let mut scan_stack = vec![root_path];
     let group_file_name = OsStr::new(GROUP_FILE_NAME);
     let mut groups = vec![];
@@ -20,15 +20,14 @@ pub fn scan_library(root_path: PathBuf) -> anyhow::Result<Vec<Group>> {
         let mut dirs = vec![];
         let mut group = None;
 
-        for entry in std::fs::read_dir(&dir)? {
-            let entry = entry?;
-            let path = entry.path();
+        for path in fs.read_dir(dir)? {
+            let path = path?;
 
-            if path.is_dir() {
+            if fs.is_dir(&path) {
                 dirs.push(path);
-            } else if path.is_file() {
-                if path.file_name() == Some(group_file_name) {
-                    group = Some((user_defined::GroupFile::from_file(&path)?, path));
+            } else if fs.is_file(&path) {
+                if fs.path_trailing(path.as_ref()) == Some(group_file_name) {
+                    group = Some((fs.parse_group_file(&path)?, path));
                 } else {
                     files.push(path);
                 }
@@ -45,26 +44,27 @@ pub fn scan_library(root_path: PathBuf) -> anyhow::Result<Vec<Group>> {
     // TODO par_iter here?
     groups
         .into_iter()
-        .map(|(path, group, dirs, files)| scan_group(path, group, dirs, files))
+        .map(|(path, group, dirs, files)| scan_group(fs, path, group, dirs, files))
         .collect::<anyhow::Result<Vec<_>>>()
 }
 
-fn scan_group(
-    root_path: PathBuf,
+fn scan_group<F: Fs>(
+    fs: &F,
+    root_path: F::PathBuf,
     group: user_defined::GroupFile,
-    root_dirs: Vec<PathBuf>,
-    root_files: Vec<PathBuf>,
-) -> anyhow::Result<Group> {
+    root_dirs: Vec<F::PathBuf>,
+    root_files: Vec<F::PathBuf>,
+) -> anyhow::Result<Group<F>> {
     let mut scan_stack = root_dirs;
     // TODO have to include path-relative-to-root_dirs
-    let mut music_files: Vec<PathBuf> = vec![];
+    let mut music_files: Vec<F::PathBuf> = vec![];
     let scan_exts: HashSet<OsString> = group.scan_filter().map_or_else(
         || NATIVE_MUSIC_EXTS.iter().map(|s| s.into()).collect(),
         |scan_filter| scan_filter.ext_filters.iter().map(|s| s.into()).collect(),
     );
 
     for path in root_files {
-        if let Some(ext) = path.extension() {
+        if let Some(ext) = fs.path_ext(path.as_ref()) {
             if scan_exts.contains(ext) {
                 music_files.push(path);
             }
@@ -72,14 +72,13 @@ fn scan_group(
     }
 
     while let Some(dir) = scan_stack.pop() {
-        for entry in std::fs::read_dir(&dir)? {
-            let entry = entry?;
-            let path = entry.path();
+        for path in fs.read_dir(dir)? {
+            let path = path?;
 
-            if path.is_dir() {
+            if fs.is_dir(&path) {
                 scan_stack.push(path);
-            } else if path.is_file() {
-                if let Some(ext) = path.extension() {
+            } else if fs.is_file(&path) {
+                if let Some(ext) = fs.path_ext(path.as_ref()) {
                     if scan_exts.contains(ext) {
                         music_files.push(path);
                     }
@@ -95,7 +94,15 @@ fn scan_group(
             title,
             songs,
         } => Ok(Group::PartialCompilation(
-            CompilationInputGroup::new(&root_path, origin, scan_filter, title, songs, music_files),
+            CompilationInputGroup::new(
+                fs,
+                root_path.as_ref(),
+                origin,
+                scan_filter,
+                title,
+                songs,
+                music_files,
+            ),
             root_path,
         )),
         user_defined::GroupFile::Album {
@@ -106,7 +113,8 @@ fn scan_group(
             songs,
         } => Ok(Group::PartialAlbum(
             AlbumInputGroup::new(
-                &root_path,
+                fs,
+                root_path.as_ref(),
                 origin,
                 override_metadata,
                 scan_filter,

@@ -60,6 +60,7 @@ use crate::{
         native_metadata::{NativeMetadata, NativeMetadataFormat},
         user_defined::{AlbumInputSongOverride, CompilationInputSongOverride, Origin, ScanFilter},
     },
+    fs::{Fs, FsPathBuf},
     resolver::OutputGroupKey,
 };
 
@@ -131,8 +132,8 @@ pub mod user_defined {
         },
     }
     impl GroupFile {
-        pub fn from_file(p: &Path) -> anyhow::Result<GroupFile> {
-            let document = std::fs::read_to_string(p)?.parse::<toml_edit::DocumentMut>()?;
+        pub fn from_str(s: &str) -> anyhow::Result<GroupFile> {
+            let document = s.parse::<toml_edit::DocumentMut>()?;
             let file = toml_edit::de::from_document(document)?;
             Ok(file)
         }
@@ -236,19 +237,18 @@ pub mod metadata {
 //     /// Base64 encoded SHA256 digest of the file, used for integrity checks
 //     pub hash: String,
 // }
-type FileId = PathBuf;
 
 pub mod native_metadata;
 
-pub struct CompilationInputGroup {
+pub struct CompilationInputGroup<F: Fs> {
     origin: user_defined::Origin,
     scan_filter: Option<user_defined::ScanFilter>,
     title: String,
-    song_files: Vec<CompilationInputSong>,
+    song_files: Vec<CompilationInputSong<F>>,
 }
 
-pub struct CompilationInputSong {
-    file: FileId,
+pub struct CompilationInputSong<F: Fs> {
+    file: F::PathBuf,
     origin_mbid: Option<MbId>,
     override_metadata: Option<metadata::song::Override>,
 
@@ -257,16 +257,17 @@ pub struct CompilationInputSong {
     native_metadata: NativeMetadata,
 }
 
-impl CompilationInputGroup {
+impl<F: Fs> CompilationInputGroup<F> {
     pub fn new(
-        path: &Path,
+        fs: &F,
+        root_path: &F::Path,
 
         origin: Origin,
         scan_filter: Option<ScanFilter>,
         title: String,
         songs: Vec<CompilationInputSongOverride>,
 
-        non_rel_song_paths: Vec<PathBuf>,
+        non_rel_song_paths: Vec<F::PathBuf>,
     ) -> Self {
         // Build a set of song information for all songs scanned
         let mut mapping = HashMap::new();
@@ -282,11 +283,10 @@ impl CompilationInputGroup {
                         override_metadata: None,
                         derived_metadata_src: None,
                         cached_metadata: None,
-                        native_metadata: NativeMetadataFormat::parse_from_file(&p)
-                            .unwrap_or_default(), // TODO log errors
+                        native_metadata: fs.parse_native_metadata(&p).unwrap_or_default(), // TODO log errors
                     },
                 );
-                (p.strip_prefix(path)
+                (fs.strip_prefix(&p, root_path)
                     .expect("non_rel_song_paths had a path that wasn't prefixed with the parent")
                     .to_owned())
             })
@@ -302,14 +302,13 @@ impl CompilationInputGroup {
 
         // For each override:
         for s in songs {
-            let mut path = PathBuf::new();
-            path.push(s.file_rel_path);
+            let path = F::PathBuf::parse_path_from_str(&s.file_rel_path);
 
             // - apply the reordering if present. we want to apply the reorderings in file order so it makes sense to the user.
             // TODO does this make sense or is it just confusing? it will be stable but if the user asks for "z is 5, y is 4, x is 3" they will/will not get the exact indices they want
             match s.override_position {
                 Some(override_pos) => {
-                    let existing_pos = rel_song_paths.iter().position(|p| p.as_os_str() == path.as_os_str()).expect("CompilationInputGroup file contained an override for a file that isn't in the compilation");
+                    let existing_pos = rel_song_paths.iter().position(|p| *p == path).expect("CompilationInputGroup file contained an override for a file that isn't in the compilation");
                     // if we need to, reorder by shifting things up and down.
                     if existing_pos < override_pos {
                         (&mut rel_song_paths[existing_pos..=override_pos]).rotate_left(1);
@@ -357,28 +356,28 @@ impl CompilationInputGroup {
     }
 }
 
-pub struct AlbumInputGroup {
+pub struct AlbumInputGroup<F: Fs> {
     origin: user_defined::Origin,
     override_metadata: Option<metadata::album::Override>,
     scan_filter: Option<user_defined::ScanFilter>,
-    album_art: Option<FileId>,
+    album_art: Option<F::PathBuf>,
 
-    song_files: Vec<AlbumInputSong>,
+    song_files: Vec<AlbumInputSong<F>>,
 
     derived_metadata: Option<metadata::album::DerivedMetadataSource>,
     cached_metadata: Option<(metadata::album::Cached, Vec<metadata::song::Cached>)>,
 }
-pub struct AlbumInputSong {
-    file: FileId,
+pub struct AlbumInputSong<F: Fs> {
+    file: F::PathBuf,
     override_metadata: Option<metadata::song::Override>,
     native_metadata: NativeMetadata,
 
     adjusted_disc_idx: u64,
     adjusted_track_idx: u64,
 }
-impl AlbumInputGroup {
+impl<F: Fs> AlbumInputGroup<F> {
     pub fn computed_name(&self) -> Option<&String> {
-        // TODO fall back to individual song native_metadata
+        // TODO fall back to individual song native_metadata Album title
         self.override_metadata
             .as_ref()
             .map(|o| o.album_title.as_ref())
@@ -407,7 +406,8 @@ impl AlbumInputGroup {
     }
 
     pub fn new(
-        path: &Path,
+        fs: &F,
+        root_path: &F::Path,
 
         origin: Origin,
         override_metadata: Option<metadata::album::Override>,
@@ -415,14 +415,13 @@ impl AlbumInputGroup {
         album_art: Option<String>,
         songs: Vec<AlbumInputSongOverride>,
 
-        non_rel_song_paths: Vec<PathBuf>,
+        non_rel_song_paths: Vec<F::PathBuf>,
     ) -> Self {
         // Build a set of song information for all songs scanned
         let mut override_mapping = HashMap::new();
 
         for s in songs {
-            let mut path = PathBuf::new();
-            path.push(&s.file_rel_path);
+            let path = F::PathBuf::parse_path_from_str(&s.file_rel_path);
 
             // - update the mapping with the override information
             let s_mapping = override_mapping.get_mut(&path);
@@ -453,13 +452,13 @@ impl AlbumInputGroup {
         let mut rel_song_paths = non_rel_song_paths
             .into_iter()
             .map(|p| {
-                let unprefixed_p = p
-                    .strip_prefix(path)
+                let unprefixed_p = fs
+                    .strip_prefix(&p, root_path)
                     .expect("non_rel_song_paths had a path that wasn't prefixed with the parent")
                     .to_owned();
                 native_metadata_mapping.insert(
                     unprefixed_p.clone(),
-                    NativeMetadataFormat::parse_from_file(&p).unwrap_or_default(), // TODO log errors
+                    fs.parse_native_metadata(&p).unwrap_or_default(), // TODO log errors
                 );
                 unprefixed_p
             })
@@ -513,7 +512,7 @@ impl AlbumInputGroup {
             origin,
             override_metadata,
             scan_filter,
-            album_art: album_art.map(|s| s.into()),
+            album_art: album_art.map(|s| F::PathBuf::parse_path_from_str(&s)),
             song_files,
             derived_metadata: None,
             cached_metadata: None,

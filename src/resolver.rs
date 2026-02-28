@@ -2,7 +2,12 @@ use std::path::Path;
 
 use async_trait::async_trait;
 
-use crate::data_model::{AlbumInputGroup, MbId, metadata};
+use crate::{
+    data_model::{AlbumInputGroup, MbId, metadata},
+    fs::StdFs,
+};
+
+// TODO don't depend on StdFs
 
 // TODO take scanner output, group it under these keys once
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -29,7 +34,7 @@ pub trait MetadataDeriver {
     /// e.g. take the origin MBID and pass it through, or take the origin CDDB ID and best-effort look up what it is
     async fn try_rederive_album(
         &mut self,
-        album: &AlbumInputGroup,
+        album: &AlbumInputGroup<StdFs>,
     ) -> Option<metadata::album::DerivedMetadataSource> {
         None
     }

@@ -3,6 +3,7 @@ use std::path::Path;
 use id3::TagLike;
 use mp4ameta::ChplTimescale;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NativeMetadataFormat {
     None,
     ID3,
@@ -16,6 +17,7 @@ pub const NATIVE_MUSIC_EXTS: [&'static str; 6] = [
     // TODO m4b support one day? requires general splitting-big-file support.
 ];
 
+#[derive(Debug, Clone)]
 pub struct NativeMetadata {
     pub fmt: NativeMetadataFormat,
     pub name: Option<String>,
@@ -45,7 +47,7 @@ impl Default for NativeMetadata {
 }
 
 impl NativeMetadataFormat {
-    pub fn parse_from_file(path: &Path) -> Result<NativeMetadata, String> {
+    pub fn parse_from_file(path: &Path) -> anyhow::Result<NativeMetadata> {
         // TODO more robust detection could use e.g. Symphonia
 
         let fmt = {
@@ -67,7 +69,7 @@ impl NativeMetadataFormat {
         match fmt {
             NativeMetadataFormat::None => Ok(NativeMetadata::default()),
             NativeMetadataFormat::ID3 => {
-                let tag = id3::Tag::read_from_path(&path).map_err(|err| err.to_string())?;
+                let tag = id3::Tag::read_from_path(&path)?;
                 Ok(NativeMetadata {
                     fmt,
                     name: tag.title().map(str::to_owned),
@@ -97,8 +99,7 @@ impl NativeMetadataFormat {
                         read_audio_info: true,
                         chpl_timescale: ChplTimescale::DEFAULT,
                     },
-                )
-                .map_err(|err| err.to_string())?;
+                )?;
                 Ok(NativeMetadata {
                     fmt,
                     name: tag.take_title(),
@@ -116,7 +117,7 @@ impl NativeMetadataFormat {
                 })
             }
             NativeMetadataFormat::FLAC => {
-                let tag = metaflac::Tag::read_from_path(&path).map_err(|err| err.to_string())?;
+                let tag = metaflac::Tag::read_from_path(&path)?;
 
                 // https://xiph.org/vorbis/doc/v-comment.html
                 // TODO include musicbrainz tags?
@@ -153,12 +154,9 @@ impl NativeMetadataFormat {
                                 .get(1)
                                 .expect("can't match regex without first group")
                                 .as_str()
-                                .parse::<u64>()
-                                .map_err(|err| err.to_string())?;
+                                .parse::<u64>()?;
                             let track_num = match cs.get(2) {
-                                Some(m) => {
-                                    Some(m.as_str().parse::<u64>().map_err(|err| err.to_string())?)
-                                }
+                                Some(m) => Some(m.as_str().parse::<u64>()?),
                                 None => None,
                             };
 
