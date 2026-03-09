@@ -108,15 +108,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
-name = "chromaprint"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b6824d8467bf7364d809c950cd13b9b95448769ce768123708ea60cd8f31333d"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "chrono"
 version = "0.4.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1262,6 +1253,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
+name = "string-literals"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "139247bfd1965ad72162877fbbc1f5410b6fda94c65e5fa91b59b58c56444398"
+
+[[package]]
 name = "syn"
 version = "1.0.109"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1509,13 +1506,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "chromaprint",
  "id3",
  "metaflac",
  "mp4ameta",
  "musicbrainz_rs",
  "regex",
  "serde",
+ "string-literals",
  "toml_edit",
 ]
 

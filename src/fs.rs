@@ -96,13 +96,14 @@ impl Fs for StdFs {
 
 #[cfg(test)]
 pub mod test {
+    use crate::fs::{Fs, FsPathBuf};
     use std::ffi::OsStr;
 
     use anyhow::bail;
+    use string_literals::s;
 
-    use crate::{
-        data_model::{Chromaprint, native_metadata::NativeMetadata, user_defined::GroupFile},
-        fs::Fs,
+    use crate::data_model::{
+        Chromaprint, native_metadata::NativeMetadata, user_defined::GroupFile,
     };
 
     pub enum TestFs {
@@ -240,9 +241,25 @@ pub mod test {
         )])
     }
 
+    fn debugify_error<T, E: std::fmt::Debug>(r: Result<T, E>) -> Result<T, String> {
+        r.map_err(|e| format!("{e:?}"))
+    }
+
     #[test]
     fn test_traverse() {
+        type PathBuf = <TestFs as Fs>::PathBuf;
         let fs = test_hierarchy();
-        fs.read_dir("hello");
+        assert!(fs.read_dir(PathBuf::parse_path_from_str("hello")).is_err());
+        let dir1 = fs.read_dir(PathBuf::parse_path_from_str("dir1"));
+        assert!(dir1.is_ok());
+        let dir1_contents = dir1.unwrap().map(debugify_error).collect::<Vec<_>>();
+        assert_eq!(
+            dir1_contents,
+            vec![
+                Ok(vec![s!("dir1"), s!("file1")]),
+                Ok(vec![s!("dir1"), s!("file2")]),
+                Ok(vec![s!("dir1"), s!("file3")]),
+            ]
+        );
     }
 }

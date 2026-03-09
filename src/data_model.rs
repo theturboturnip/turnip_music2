@@ -52,7 +52,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use chromaprint::ChromaprintAlgorithm;
+// use chromaprint::ChromaprintAlgorithm;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -76,7 +76,7 @@ pub struct MbDiscId(String);
 pub struct CddbDiscId(String);
 
 /// Song audio fingerprint via chromaprint, which allows lookup via MusicBrainz
-pub struct Chromaprint(ChromaprintAlgorithm, Vec<u8>);
+pub struct Chromaprint(/* ChromaprintAlgorithm, */ Vec<u8>);
 
 /// Data types defining the user-controlled TOML files
 pub mod user_defined {
