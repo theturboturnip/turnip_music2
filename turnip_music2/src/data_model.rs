@@ -86,8 +86,8 @@ pub mod user_defined {
 
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
     pub struct ConfigFile {
-        pub search_paths: Vec<String>,
-        pub artist_name_overrides: Vec<ConfigArtistNameOverride>,
+        pub search_paths: Option<Vec<String>>,
+        pub artist_name_overrides: Option<Vec<ConfigArtistNameOverride>>,
     }
     impl ConfigFile {
         pub fn from_str(s: &str) -> anyhow::Result<ConfigFile> {
@@ -128,14 +128,14 @@ pub mod user_defined {
             origin: Origin,
             scan_filter: Option<ScanFilter>,
             title: String,
-            override_songs: Vec<CompilationInputSongOverride>,
+            override_songs: Option<Vec<CompilationInputSongOverride>>,
         },
         Album {
             origin: Origin,
             scan_filter: Option<ScanFilter>,
             album_art_rel_path: Option<String>,
             override_metadata: Option<metadata::album::Override>,
-            override_songs: Vec<AlbumInputSongOverride>,
+            override_songs: Option<Vec<AlbumInputSongOverride>>,
         },
     }
     impl GroupFile {

@@ -282,9 +282,12 @@ search_paths=["example_album"]
                         "music.tm2.toml",
                         TestFs::TextFile(
                             r#"
-type="album"
+type="Album"
 scan_filter={ ext_filters=["mp3"] }
 # exclude album_art_rel_path
+
+[origin]
+# put origin here eventually
 
 [override_metadata]
 album_title="Example Album"
@@ -378,8 +381,8 @@ override_disc_idx=1
         assert_eq!(
             file,
             Ok(ConfigFile {
-                search_paths: string_vec!["example_album"],
-                artist_name_overrides: string_vec![],
+                search_paths: Some(string_vec!["example_album"]),
+                artist_name_overrides: None,
             })
         );
     }
@@ -405,12 +408,12 @@ override_disc_idx=1
                     fixed_disc_idx: None,
                     offset_track_idx: None,
                 }),
-                override_songs: vec![AlbumInputSongOverride {
+                override_songs: Some(vec![AlbumInputSongOverride {
                     file_rel_path: s!("song1.mp3"),
                     override_metadata: None,
                     override_disc_idx: Some(1),
                     override_track_idx: None
-                }]
+                }]),
             })
         );
     }
