@@ -92,7 +92,7 @@ fn scan_group<F: Fs>(
             origin,
             scan_filter,
             title,
-            songs,
+            override_songs: songs,
         } => Ok(Group::PartialCompilation(
             CompilationInputGroup::new(
                 fs,
@@ -110,7 +110,7 @@ fn scan_group<F: Fs>(
             scan_filter,
             album_art_rel_path,
             override_metadata,
-            songs,
+            override_songs: songs,
         } => Ok(Group::PartialAlbum(
             AlbumInputGroup::new(
                 fs,

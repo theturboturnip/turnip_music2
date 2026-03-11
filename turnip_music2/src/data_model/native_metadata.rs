@@ -17,7 +17,7 @@ pub const NATIVE_MUSIC_EXTS: [&'static str; 6] = [
     // TODO m4b support one day? requires general splitting-big-file support.
 ];
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NativeMetadata {
     pub fmt: NativeMetadataFormat,
     pub name: Option<String>,

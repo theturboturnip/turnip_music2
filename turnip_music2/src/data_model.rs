@@ -84,20 +84,27 @@ pub mod user_defined {
     use serde::{Deserialize, Serialize};
     use std::path::Path;
 
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
     pub struct ConfigFile {
         pub search_paths: Vec<String>,
         pub artist_name_overrides: Vec<ConfigArtistNameOverride>,
     }
+    impl ConfigFile {
+        pub fn from_str(s: &str) -> anyhow::Result<ConfigFile> {
+            let document = s.parse::<toml_edit::DocumentMut>()?;
+            let file = toml_edit::de::from_document(document)?;
+            Ok(file)
+        }
+    }
 
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
     pub struct ConfigArtistNameOverride {
         pub artist_id: MbId,
         pub artist_name: String,
     }
 
     /// A set of concrete sources for metadata, controlled by the user, that are never discarded.
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
     pub struct Origin {
         pub url: Option<String>,
         pub mb_release_group_id: Option<MbId>,
@@ -108,27 +115,27 @@ pub mod user_defined {
 
     /// A filter for the files to actually scan and use ---
     /// in case of icky input directories with different copies of the same music
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
     pub struct ScanFilter {
         /// e.g. \['mp3', 'flac'\]
         pub ext_filters: Vec<String>,
     }
 
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
     #[serde(tag = "type")]
     pub enum GroupFile {
         Compilation {
             origin: Origin,
             scan_filter: Option<ScanFilter>,
             title: String,
-            songs: Vec<CompilationInputSongOverride>,
+            override_songs: Vec<CompilationInputSongOverride>,
         },
         Album {
             origin: Origin,
             scan_filter: Option<ScanFilter>,
             album_art_rel_path: Option<String>,
             override_metadata: Option<metadata::album::Override>,
-            songs: Vec<AlbumInputSongOverride>,
+            override_songs: Vec<AlbumInputSongOverride>,
         },
     }
     impl GroupFile {
@@ -146,7 +153,7 @@ pub mod user_defined {
         }
     }
 
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
     pub struct CompilationInputSongOverride {
         pub file_rel_path: String,
         pub origin_mbid: Option<MbId>,
@@ -154,7 +161,7 @@ pub mod user_defined {
         pub override_position: Option<usize>,
     }
 
-    #[derive(Serialize, Deserialize, Debug)]
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
     pub struct AlbumInputSongOverride {
         pub file_rel_path: String,
         pub override_metadata: Option<metadata::song::Override>,
@@ -183,7 +190,7 @@ pub mod metadata {
             pub mb_recording_id: Option<MbId>,
         }
 
-        #[derive(Serialize, Deserialize, Debug)]
+        #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
         pub struct Override {
             pub song_title: Option<String>,
             pub song_artists: Option<Vec<String>>,
@@ -216,7 +223,7 @@ pub mod metadata {
             // pub track_idx: i64,
         }
 
-        #[derive(Serialize, Deserialize, Debug)]
+        #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
         pub struct Override {
             pub album_title: Option<String>,
             pub album_artists: Option<Vec<String>>,

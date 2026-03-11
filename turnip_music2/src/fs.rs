@@ -2,7 +2,7 @@ use std::{ffi::OsStr, fmt::Debug, hash::Hash};
 
 use crate::data_model::{
     native_metadata::{NativeMetadata, NativeMetadataFormat},
-    user_defined::GroupFile,
+    user_defined::{ConfigFile, GroupFile},
 };
 
 pub trait FsPathBuf: Clone + Hash + Debug + PartialEq + Eq + PartialOrd + Ord {
@@ -32,6 +32,7 @@ pub trait Fs {
         &self,
         path: P,
     ) -> anyhow::Result<NativeMetadata>;
+    fn parse_config_file<P: AsRef<Self::Path>>(&self, path: P) -> anyhow::Result<ConfigFile>;
     fn parse_group_file<P: AsRef<Self::Path>>(&self, path: P) -> anyhow::Result<GroupFile>;
 }
 
@@ -87,7 +88,10 @@ impl Fs for StdFs {
     ) -> anyhow::Result<NativeMetadata> {
         Ok(NativeMetadataFormat::parse_from_file(path.as_ref())?)
     }
-
+    fn parse_config_file<P: AsRef<Self::Path>>(&self, path: P) -> anyhow::Result<ConfigFile> {
+        let data = std::fs::read_to_string(path)?;
+        ConfigFile::from_str(&data)
+    }
     fn parse_group_file<P: AsRef<Self::Path>>(&self, path: P) -> anyhow::Result<GroupFile> {
         let data = std::fs::read_to_string(path)?;
         GroupFile::from_str(&data)
@@ -96,11 +100,17 @@ impl Fs for StdFs {
 
 #[cfg(test)]
 pub mod test {
-    use crate::fs::{Fs, FsPathBuf};
-    use std::ffi::OsStr;
+    use crate::{
+        data_model::{
+            native_metadata::NativeMetadataFormat,
+            user_defined::{AlbumInputSongOverride, ConfigFile, Origin, ScanFilter},
+        },
+        fs::{Fs, FsPathBuf},
+    };
+    use std::{ffi::OsStr, path::PathBuf};
 
     use anyhow::bail;
-    use string_literals::s;
+    use string_literals::{s, string_vec};
 
     use crate::data_model::{
         Chromaprint, native_metadata::NativeMetadata, user_defined::GroupFile,
@@ -222,6 +232,13 @@ pub mod test {
             }
         }
 
+        fn parse_config_file<P: AsRef<Self::Path>>(&self, path: P) -> anyhow::Result<ConfigFile> {
+            match self.traverse(path)? {
+                TestFs::TextFile(contents) => ConfigFile::from_str(&contents),
+                _ => bail!("not a music file, no metadata found"),
+            }
+        }
+
         fn parse_group_file<P: AsRef<Self::Path>>(&self, path: P) -> anyhow::Result<GroupFile> {
             match self.traverse(path)? {
                 TestFs::TextFile(contents) => GroupFile::from_str(&contents),
@@ -230,15 +247,76 @@ pub mod test {
         }
     }
 
-    fn test_hierarchy() -> TestFs {
-        TestFs::Dir(vec![(
-            "dir1".to_owned(),
+    macro_rules! test_dir {
+        [ $( ($name:literal, $entry:expr), )* ] => {
             TestFs::Dir(vec![
-                ("file1".to_owned(), TestFs::OtherFile),
-                ("file2".to_owned(), TestFs::OtherFile),
-                ("file3".to_owned(), TestFs::OtherFile),
-            ]),
-        )])
+                $(($name.to_owned(), $entry),)*
+            ])
+        };
+    }
+
+    fn test_hierarchy() -> TestFs {
+        test_dir!(
+            (
+                "dir1",
+                test_dir!(
+                    ("file1", TestFs::OtherFile),
+                    ("file2", TestFs::OtherFile),
+                    ("file3", TestFs::OtherFile),
+                )
+            ),
+            ("base_file", TestFs::OtherFile),
+            (
+                "config.tm2.toml",
+                TestFs::TextFile(
+                    r#"
+search_paths=["example_album"]
+"#
+                    .to_string()
+                )
+            ),
+            (
+                "example_album",
+                test_dir!(
+                    (
+                        "music.tm2.toml",
+                        TestFs::TextFile(
+                            r#"
+type="album"
+scan_filter={ ext_filters=["mp3"] }
+# exclude album_art_rel_path
+
+[override_metadata]
+album_title="Example Album"
+album_artists=["Mr Example", "Ms Example"]
+
+[[override_songs]]
+file_rel_path="song1.mp3"
+override_disc_idx=1
+"#
+                            .to_string()
+                        )
+                    ),
+                    (
+                        "song1.mp3",
+                        TestFs::MusicFile(
+                            NativeMetadata {
+                                fmt: NativeMetadataFormat::ID3,
+                                name: Some("song1".to_owned()),
+                                album: None,
+                                album_artists: vec![],
+                                artist: vec![],
+                                num_discs: None,
+                                disc_idx: None,
+                                num_tracks: None,
+                                track_idx: None
+                            },
+                            None
+                        )
+                    ),
+                )
+            ),
+        )
     }
 
     fn debugify_error<T, E: std::fmt::Debug>(r: Result<T, E>) -> Result<T, String> {
@@ -256,10 +334,107 @@ pub mod test {
         assert_eq!(
             dir1_contents,
             vec![
-                Ok(vec![s!("dir1"), s!("file1")]),
-                Ok(vec![s!("dir1"), s!("file2")]),
-                Ok(vec![s!("dir1"), s!("file3")]),
+                Ok(string_vec!["dir1", "file1"]),
+                Ok(string_vec!["dir1", "file2"]),
+                Ok(string_vec!["dir1", "file3"]),
             ]
+        );
+    }
+
+    #[test]
+    fn test_is_file() {
+        type PathBuf = <TestFs as Fs>::PathBuf;
+        let fs = test_hierarchy();
+        assert!(fs.is_file(PathBuf::parse_path_from_str("base_file")));
+        assert!(fs.is_file(PathBuf::parse_path_from_str("config.tm2.toml")));
+        assert!(fs.is_file(PathBuf::parse_path_from_str("example_album/music.tm2.toml")));
+        assert!(fs.is_file(PathBuf::parse_path_from_str("example_album/song1.mp3")));
+
+        assert!(!fs.is_file(PathBuf::parse_path_from_str("example_album")));
+        assert!(!fs.is_file(PathBuf::parse_path_from_str("dir1")));
+        assert!(!fs.is_file(PathBuf::parse_path_from_str("dummy I made up")));
+    }
+
+    #[test]
+    fn test_is_dir() {
+        type PathBuf = <TestFs as Fs>::PathBuf;
+        let fs = test_hierarchy();
+        assert!(fs.is_dir(PathBuf::parse_path_from_str("example_album")));
+        assert!(fs.is_dir(PathBuf::parse_path_from_str("dir1")));
+
+        assert!(!fs.is_dir(PathBuf::parse_path_from_str("base_file")));
+        assert!(!fs.is_dir(PathBuf::parse_path_from_str("config.tm2.toml")));
+        assert!(!fs.is_dir(PathBuf::parse_path_from_str("example_album/music.tm2.toml")));
+        assert!(!fs.is_dir(PathBuf::parse_path_from_str("example_album/song1.mp3")));
+        assert!(!fs.is_dir(PathBuf::parse_path_from_str("dummy I made up")));
+    }
+
+    #[test]
+    fn test_config_file() {
+        type PathBuf = <TestFs as Fs>::PathBuf;
+        let fs = test_hierarchy();
+        let file =
+            debugify_error(fs.parse_config_file(PathBuf::parse_path_from_str("config.tm2.toml")));
+        assert_eq!(
+            file,
+            Ok(ConfigFile {
+                search_paths: string_vec!["example_album"],
+                artist_name_overrides: string_vec![],
+            })
+        );
+    }
+
+    #[test]
+    fn test_group_file() {
+        type PathBuf = <TestFs as Fs>::PathBuf;
+        let fs = test_hierarchy();
+        let file = debugify_error(
+            fs.parse_group_file(PathBuf::parse_path_from_str("example_album/music.tm2.toml")),
+        );
+        assert_eq!(
+            file,
+            Ok(GroupFile::Album {
+                origin: Origin::default(),
+                scan_filter: Some(ScanFilter {
+                    ext_filters: string_vec!["mp3"]
+                }),
+                album_art_rel_path: None,
+                override_metadata: Some(crate::data_model::metadata::album::Override {
+                    album_title: Some(s!("Example Album")),
+                    album_artists: Some(string_vec!["Mr Example", "Ms Example"]),
+                    fixed_disc_idx: None,
+                    offset_track_idx: None,
+                }),
+                override_songs: vec![AlbumInputSongOverride {
+                    file_rel_path: s!("song1.mp3"),
+                    override_metadata: None,
+                    override_disc_idx: Some(1),
+                    override_track_idx: None
+                }]
+            })
+        );
+    }
+
+    #[test]
+    fn test_song_metadata() {
+        type PathBuf = <TestFs as Fs>::PathBuf;
+        let fs = test_hierarchy();
+        let file = debugify_error(
+            fs.parse_native_metadata(PathBuf::parse_path_from_str("example_album/song1.mp3")),
+        );
+        assert_eq!(
+            file,
+            Ok(NativeMetadata {
+                fmt: NativeMetadataFormat::ID3,
+                name: Some("song1".to_owned()),
+                album: None,
+                album_artists: vec![],
+                artist: vec![],
+                num_discs: None,
+                disc_idx: None,
+                num_tracks: None,
+                track_idx: None
+            })
         );
     }
 }
