@@ -28,6 +28,7 @@ pub struct NativeMetadata {
     pub disc_idx: Option<u64>,
     pub num_tracks: Option<u64>,
     pub track_idx: Option<u64>,
+    pub genres: Vec<String>,
 }
 
 impl Default for NativeMetadata {
@@ -42,6 +43,7 @@ impl Default for NativeMetadata {
             disc_idx: Default::default(),
             num_tracks: Default::default(),
             track_idx: Default::default(),
+            genres: Default::default(),
         }
     }
 }
@@ -72,20 +74,25 @@ impl NativeMetadataFormat {
                 let tag = id3::Tag::read_from_path(&path)?;
                 Ok(NativeMetadata {
                     fmt,
-                    name: tag.title().map(str::to_owned),
-                    album: tag.album().map(str::to_owned),
+                    name: tag.title().map(str::to_string),
+                    album: tag.album().map(str::to_string),
                     album_artists: match tag.album_artist() {
-                        Some(s) => vec![s.to_owned()],
+                        Some(s) => vec![s.to_string()],
                         None => vec![],
                     },
                     artist: tag
                         .artists()
-                        .map(|v| v.into_iter().map(|s| s.to_owned()).collect())
+                        .map(|v| v.into_iter().map(|s| s.to_string()).collect())
                         .unwrap_or_default(),
                     num_discs: tag.total_discs().map(Into::into),
                     disc_idx: tag.disc().map(Into::into),
                     num_tracks: tag.total_tracks().map(Into::into),
                     track_idx: tag.track().map(Into::into),
+                    genres: tag
+                        .genres_parsed()
+                        .into_iter()
+                        .map(|s| s.to_string())
+                        .collect(),
                 })
             }
             NativeMetadataFormat::M4A => {
@@ -114,6 +121,7 @@ impl NativeMetadataFormat {
                     disc_idx: tag.disc().0.map(Into::into),
                     num_tracks: tag.track().1.map(Into::into),
                     track_idx: tag.track().0.map(Into::into),
+                    genres: tag.genres().map(str::to_string).collect(),
                 })
             }
             NativeMetadataFormat::FLAC => {
@@ -139,9 +147,15 @@ impl NativeMetadataFormat {
                     .get_vorbis("artist")
                     .map(|iter| iter.last().map(str::to_owned))
                     .flatten();
+                let genres = tag
+                    .get_vorbis("genre")
+                    .map(|iter| iter.last().map(str::to_owned))
+                    .flatten()
+                    .into_iter()
+                    .collect::<Vec<_>>();
 
                 let track_number_str = tag
-                    .get_vorbis("artist")
+                    .get_vorbis("tracknumber")
                     .map(|iter| iter.last()) // NOT to_owned, don't need that
                     .flatten()
                     .unwrap_or_default();
@@ -176,6 +190,7 @@ impl NativeMetadataFormat {
                     disc_idx: None,
                     num_tracks: track_idx,
                     track_idx: num_tracks,
+                    genres,
                 })
             }
         }

@@ -312,7 +312,8 @@ override_disc_idx=1
                                 num_discs: None,
                                 disc_idx: None,
                                 num_tracks: None,
-                                track_idx: None
+                                track_idx: None,
+                                genres: vec![],
                             },
                             None
                         )
@@ -412,7 +413,7 @@ override_disc_idx=1
                     file_rel_path: s!("song1.mp3"),
                     override_metadata: None,
                     override_disc_idx: Some(1),
-                    override_track_idx: None
+                    override_track_idx: None,
                 }]),
             })
         );
@@ -436,7 +437,8 @@ override_disc_idx=1
                 num_discs: None,
                 disc_idx: None,
                 num_tracks: None,
-                track_idx: None
+                track_idx: None,
+                genres: vec![],
             })
         );
     }
