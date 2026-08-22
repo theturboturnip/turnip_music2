@@ -5,14 +5,17 @@ use crate::data_model::{
     user_defined::{ConfigFile, GroupFile},
 };
 
-pub trait FsPathBuf: Clone + Hash + Debug + PartialEq + Eq + PartialOrd + Ord {
+pub trait FsPathBuf<Path: ?Sized>:
+    Clone + Hash + Debug + PartialEq + Eq + PartialOrd + Ord
+{
     fn parse_path_from_str(s: &str) -> Self;
+    fn joined<P: AsRef<Path>>(self, p: P) -> Self;
 }
 
 /// Minimal trait encoding only the necessary components of a filesystem scanner.
 pub trait Fs {
-    type Path: ?Sized + ToOwned<Owned = Self::PathBuf> + AsRef<Self::Path>; // = std::path::Path;
-    type PathBuf: AsRef<Self::Path> + FsPathBuf;
+    type Path: ?Sized + ToOwned<Owned = Self::PathBuf> + AsRef<Self::Path>;
+    type PathBuf: AsRef<Self::Path> + FsPathBuf<Self::Path>;
 
     fn read_dir<'s, P: AsRef<Self::Path>>(
         &'s self,
@@ -37,10 +40,15 @@ pub trait Fs {
 }
 
 pub struct StdFs;
-impl FsPathBuf for std::path::PathBuf {
+impl FsPathBuf<std::path::Path> for std::path::PathBuf {
     fn parse_path_from_str(s: &str) -> Self {
         // This parses multiple path components from the string, instead of creating a single
         std::path::PathBuf::from(s)
+    }
+
+    fn joined<P: AsRef<std::path::Path>>(mut self, p: P) -> Self {
+        std::path::PathBuf::push(&mut self, p);
+        self
     }
 }
 impl Fs for StdFs {
@@ -103,7 +111,7 @@ pub mod test {
     use crate::{
         data_model::{
             native_metadata::NativeMetadataFormat,
-            user_defined::{AlbumInputSongOverride, ConfigFile, Origin, ScanFilter},
+            user_defined::{self, AlbumFileMeta, ConfigFile, Origin},
         },
         fs::{Fs, FsPathBuf},
     };
@@ -124,9 +132,15 @@ pub mod test {
         SomethingElse,
     }
 
-    impl super::FsPathBuf for Vec<String> {
+    impl super::FsPathBuf<[String]> for Vec<String> {
         fn parse_path_from_str(s: &str) -> Self {
             s.split("/").map(|s| s.to_owned()).collect()
+        }
+
+        fn joined<P: AsRef<[String]>>(mut self, p: P) -> Self {
+            let p = p.as_ref();
+            self.extend(p.into_iter().map(|s| s.clone()));
+            self
         }
     }
 
@@ -283,19 +297,17 @@ search_paths=["example_album"]
                         TestFs::TextFile(
                             r#"
 type="Album"
-scan_filter={ ext_filters=["mp3"] }
 # exclude album_art_rel_path
 
 [origin]
 # put origin here eventually
 
-[override_metadata]
-album_title="Example Album"
+[global]
+album="Example Album"
 album_artists=["Mr Example", "Ms Example"]
 
-[[override_songs]]
-file_rel_path="song1.mp3"
-override_disc_idx=1
+[files."song1.mp3"]
+name="song1"
 "#
                             .to_string()
                         )
@@ -305,7 +317,7 @@ override_disc_idx=1
                         TestFs::MusicFile(
                             NativeMetadata {
                                 fmt: NativeMetadataFormat::ID3,
-                                name: Some("song1".to_owned()),
+                                name: Some(s!("song1-mp3meta")),
                                 album: None,
                                 album_artists: vec![],
                                 artist: vec![],
@@ -383,7 +395,6 @@ override_disc_idx=1
             file,
             Ok(ConfigFile {
                 search_paths: Some(string_vec!["example_album"]),
-                artist_name_overrides: None,
             })
         );
     }
@@ -399,22 +410,18 @@ override_disc_idx=1
             file,
             Ok(GroupFile::Album {
                 origin: Origin::default(),
-                scan_filter: Some(ScanFilter {
-                    ext_filters: string_vec!["mp3"]
-                }),
-                album_art_rel_path: None,
-                override_metadata: Some(crate::data_model::metadata::album::Override {
-                    album_title: Some(s!("Example Album")),
+                album_art: None,
+                global: user_defined::AlbumGlobalMeta {
+                    album: Some(s!("Example Album")),
                     album_artists: Some(string_vec!["Mr Example", "Ms Example"]),
-                    fixed_disc_idx: None,
-                    offset_track_idx: None,
-                }),
-                override_songs: Some(vec![AlbumInputSongOverride {
-                    file_rel_path: s!("song1.mp3"),
-                    override_metadata: None,
-                    override_disc_idx: Some(1),
-                    override_track_idx: None,
-                }]),
+                    ..Default::default()
+                },
+                files: indexmap::indexmap! {
+                    s!("song1.mp3") => user_defined::AlbumFileMeta {
+                        name: s!("song1"),
+                        ..Default::default()
+                    }
+                },
             })
         );
     }
@@ -430,7 +437,7 @@ override_disc_idx=1
             file,
             Ok(NativeMetadata {
                 fmt: NativeMetadataFormat::ID3,
-                name: Some("song1".to_owned()),
+                name: Some("song1-mp3meta".to_owned()),
                 album: None,
                 album_artists: vec![],
                 artist: vec![],

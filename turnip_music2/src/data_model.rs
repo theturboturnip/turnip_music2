@@ -56,10 +56,6 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    data_model::{
-        native_metadata::{NativeMetadata, NativeMetadataFormat},
-        user_defined::{AlbumInputSongOverride, CompilationInputSongOverride, Origin, ScanFilter},
-    },
     fs::{Fs, FsPathBuf},
     resolver::OutputGroupKey,
 };
@@ -80,14 +76,20 @@ pub struct Chromaprint(/* ChromaprintAlgorithm, */ Vec<u8>);
 
 /// Data types defining the user-controlled TOML files
 pub mod user_defined {
-    use crate::data_model::{CddbDiscId, MbDiscId, MbId, metadata};
+    use crate::data_model::{
+        CddbDiscId,
+        MbDiscId,
+        MbId,
+        // metadata::{self, song},
+    };
+    use indexmap::IndexMap;
     use serde::{Deserialize, Serialize};
-    use std::path::Path;
+    use std::{collections::HashMap, path::Path};
 
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
     pub struct ConfigFile {
         pub search_paths: Option<Vec<String>>,
-        pub artist_name_overrides: Option<Vec<ConfigArtistNameOverride>>,
+        // pub artist_name_overrides: Option<Vec<ConfigArtistNameOverride>>,
     }
     impl ConfigFile {
         pub fn from_str(s: &str) -> anyhow::Result<ConfigFile> {
@@ -97,81 +99,395 @@ pub mod user_defined {
         }
     }
 
-    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-    pub struct ConfigArtistNameOverride {
-        pub artist_id: MbId,
-        pub artist_name: String,
-    }
+    // #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+    // pub struct ConfigArtistNameOverride {
+    //     pub artist_id: MbId,
+    //     pub artist_name: String,
+    // }
 
     /// A set of concrete sources for metadata, controlled by the user, that are never discarded.
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
     pub struct Origin {
+        /// An arbitrary URL.
         pub url: Option<String>,
+        /// MusicBrainz ID for a 'release group' - a logical grouping of different 'releases' of a group of songs, potentially on different 'mediums'
         pub mb_release_group_id: Option<MbId>,
+        /// MusicBrainz ID for a 'release' - a specific issuing of a group of songs, potentially on different 'mediums' such as CD, vinyl, etc
         pub mb_release_id: Option<MbId>,
+        /// MusicBrainz DiscID for a specific physical CD within a release - does not work with non-CD mediums like vinyl.
+        /// May have duplicates e.g. [`lwHl8fGzJyLXQR33ug60E8jhf4k-`](https://musicbrainz.org/cdtoc/lwHl8fGzJyLXQR33ug60E8jhf4k-)
         pub mb_discid: Option<MbDiscId>,
+        /// CDDB disc ID of a specific physical CD. Less specific than a MusicBrainz ID and more likely to have duplicates.
         pub cddb_discid: Option<CddbDiscId>,
     }
 
-    /// A filter for the files to actually scan and use ---
-    /// in case of icky input directories with different copies of the same music
-    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-    pub struct ScanFilter {
-        /// e.g. \['mp3', 'flac'\]
-        pub ext_filters: Vec<String>,
-    }
+    // /// A filter for the files to actually scan and use ---
+    // /// in case of icky input directories with different copies of the same music
+    // #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+    // pub struct ScanFilter {
+    //     /// e.g. \['mp3', 'flac'\]
+    //     pub ext_filters: Vec<String>,
+    // }
 
     #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
     #[serde(tag = "type")]
     pub enum GroupFile {
         Compilation {
             origin: Origin,
-            scan_filter: Option<ScanFilter>,
-            title: String,
-            override_songs: Option<Vec<CompilationInputSongOverride>>,
+            // scan_filter: Option<ScanFilter>,
+            title: String, // TODO use a tag system or something
+            global: CompilationGlobalMeta,
+            files: IndexMap<String, CompilationFileMeta>,
         },
         Album {
             origin: Origin,
-            scan_filter: Option<ScanFilter>,
-            album_art_rel_path: Option<String>,
-            override_metadata: Option<metadata::album::Override>,
-            override_songs: Option<Vec<AlbumInputSongOverride>>,
+            // scan_filter: Option<ScanFilter>,
+            album_art: Option<String>,
+            global: AlbumGlobalMeta,
+            files: IndexMap<String, AlbumFileMeta>,
         },
     }
     impl GroupFile {
+        pub const TOML_FILE_NAME: &'static str = "music.toml";
+
         pub fn from_str(s: &str) -> anyhow::Result<GroupFile> {
             let document = s.parse::<toml_edit::DocumentMut>()?;
             let file = toml_edit::de::from_document(document)?;
             Ok(file)
         }
 
-        pub fn scan_filter(&self) -> Option<&ScanFilter> {
-            match self {
-                GroupFile::Compilation { scan_filter, .. } => scan_filter.as_ref(),
-                GroupFile::Album { scan_filter, .. } => scan_filter.as_ref(),
+        // pub fn scan_filter(&self) -> Option<&ScanFilter> {
+        //     match self {
+        //         GroupFile::Compilation { scan_filter, .. } => scan_filter.as_ref(),
+        //         GroupFile::Album { scan_filter, .. } => scan_filter.as_ref(),
+        //     }
+        // }
+    }
+
+    /// TODO probably shouldn't be Default but it's useful for e.g. testing
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
+    pub struct CompilationFileMeta {
+        /// Likely to be set
+        pub name: String,
+        pub artists: Option<Vec<String>>,
+        pub genres: Option<Vec<String>>,
+
+        /// Generally album-related, but might still be set
+        pub album: Option<String>,
+        pub album_artists: Option<Vec<String>>,
+        pub num_discs: Option<u64>,
+        pub disc: Option<u64>,
+        pub num_tracks: Option<u64>,
+        pub track: Option<u64>,
+
+        /// Compilation-specific
+        pub sort_by_idx: Option<u64>,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
+    pub struct CompilationGlobalMeta {
+        // Can't be set globally
+        // pub name: Option<String>,
+        // pub track: Option<u64>,
+        // /// Compilation-specific
+        // pub idx: Option<u64>,
+        // TODO replace with generic ID
+        // pub mbid: Option<MbId>,
+        /// Likely to be set
+        pub artists: Option<Vec<String>>,
+        pub genres: Option<Vec<String>>,
+
+        /// Generally album-related, but might still be set
+        pub album: Option<String>,
+        pub album_artists: Option<Vec<String>>,
+        pub num_discs: Option<u64>,
+        pub disc: Option<u64>,
+        pub num_tracks: Option<u64>,
+    }
+
+    /// TODO probably shouldn't be Default but it's useful for e.g. testing
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
+    pub struct AlbumFileMeta {
+        // TODO replace with generic ID
+        // pub mbid: Option<MbId>,
+        /// Likely to be set
+        pub name: String,
+        pub artists: Option<Vec<String>>,
+        pub genres: Option<Vec<String>>,
+
+        /// Generally album-specific
+        pub album: Option<String>,
+        pub album_artists: Option<Vec<String>>,
+        pub num_discs: Option<u64>,
+        pub disc: Option<u64>,
+        pub num_tracks: Option<u64>,
+        pub track: Option<u64>,
+    }
+
+    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
+    pub struct AlbumGlobalMeta {
+        // Can't be set globally
+        // pub name: Option<String>,
+        // pub track: Option<u64>,
+        // TODO replace with generic ID
+        // pub mbid: Option<MbId>,
+        /// Likely to be set
+        pub artists: Option<Vec<String>>,
+        pub genres: Option<Vec<String>>,
+
+        /// Generally album-specific
+        pub album: Option<String>,
+        pub album_artists: Option<Vec<String>>,
+        pub num_discs: Option<u64>,
+        pub disc: Option<u64>,
+        pub num_tracks: Option<u64>,
+    }
+}
+
+/// Data types defining the internal model
+pub mod parsed {
+    use crate::{
+        data_model::user_defined,
+        fs::{Fs, FsPathBuf},
+    };
+
+    pub enum GroupFile<F: Fs> {
+        Compilation {
+            origin: user_defined::Origin,
+            // scan_filter: Option<ScanFilter>,
+            title: String, // TODO use a tag system or something
+
+            /// Pairs of (full path, metadata)
+            files: Vec<(F::PathBuf, CompilationFileMeta)>,
+        },
+        /// Partial album
+        Album {
+            origin: user_defined::Origin,
+
+            /// Full path to the album art to use (TODO should be per-item?)
+            album_art: Option<F::PathBuf>,
+
+            /// Pairs of (full path, metadata)
+            files: Vec<(F::PathBuf, AlbumFileMeta)>,
+        },
+    }
+
+    impl<F: Fs> GroupFile<F> {
+        pub fn from_user(fs: &F, root_path: &F::Path, g: user_defined::GroupFile) -> Self {
+            match g {
+                user_defined::GroupFile::Compilation {
+                    origin,
+                    title,
+                    global,
+                    files,
+                } => {
+                    let mut files = files
+                        .into_iter()
+                        .map(|(rel_path, file_meta)| {
+                            let full_path = root_path
+                                .to_owned()
+                                .joined(F::PathBuf::parse_path_from_str(&rel_path));
+
+                            let (meta, idx) = CompilationFileMeta::from_user(file_meta, &global);
+
+                            (full_path, meta, idx)
+                        })
+                        .collect::<Vec<_>>();
+                    // Sort.
+                    // Send Some(key) to the start, and then order by key within Some(key).
+                    // This allows ordering compilations per-track (ascending keys) or simply grouping similar tracks.
+                    // All non-sorted keys are sent to the end.
+                    files.sort_by(|(_, _, s1), (_, _, s2)| match (s1, s2) {
+                        (None, None) => std::cmp::Ordering::Equal,
+                        (None, Some(_)) => std::cmp::Ordering::Less,
+                        (Some(_), None) => std::cmp::Ordering::Greater,
+                        (Some(s1), Some(s2)) => s1.cmp(&s2),
+                    });
+
+                    GroupFile::Compilation {
+                        origin,
+                        title,
+                        files: files
+                            .into_iter()
+                            .map(|(p, m, _)| (p, m))
+                            .collect::<Vec<_>>(),
+                    }
+                }
+                user_defined::GroupFile::Album {
+                    origin,
+                    album_art,
+                    global,
+                    files,
+                } => {
+                    let mut disc = None;
+                    let mut track = 1;
+                    let mut files = files
+                        .into_iter()
+                        .map(|(rel_path, file_meta)| {
+                            let full_path = root_path
+                                .to_owned()
+                                .joined(F::PathBuf::parse_path_from_str(&rel_path));
+
+                            let meta =
+                                AlbumFileMeta::from_user(file_meta, &global, &mut disc, &mut track);
+
+                            (full_path, meta)
+                        })
+                        .collect::<Vec<_>>();
+                    // Sort.
+                    // Send album: None to the start, order by (album, track) ascending otherwise
+                    files.sort_by(|(_, m1), (_, m2)| {
+                        match (m1.disc, m2.disc, m1.track, m2.track) {
+                            (None, None, t1, t2) => t1.cmp(&t2),
+                            (None, Some(_), _, _) => std::cmp::Ordering::Less,
+                            (Some(_), None, _, _) => std::cmp::Ordering::Greater,
+                            (Some(a1), Some(a2), t1, t2) => (a1, t1).cmp(&(a2, t2)),
+                        }
+                    });
+
+                    // pull the data out of the mapping, ordered by the final ordering of rel_song_paths
+                    GroupFile::Album {
+                        origin,
+                        album_art: album_art.as_ref().map(|rel_path| {
+                            root_path
+                                .to_owned()
+                                .joined(F::PathBuf::parse_path_from_str(&rel_path))
+                        }),
+                        files,
+                    }
+                }
             }
         }
     }
 
-    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-    pub struct CompilationInputSongOverride {
-        pub file_rel_path: String,
-        pub origin_mbid: Option<MbId>,
-        pub override_metadata: Option<metadata::song::Override>,
-        pub override_position: Option<usize>,
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct AlbumFileMeta {
+        // TODO replace with generic ID
+        // pub mbid: Option<MbId>,
+        /// Likely to be set
+        pub name: String,
+        pub artists: Vec<String>,
+        pub genres: Vec<String>,
+
+        /// Generally album-specific
+        pub album: Option<String>,
+        pub album_artists: Vec<String>,
+        pub num_discs: Option<u64>,
+        pub disc: Option<u64>,
+        pub num_tracks: Option<u64>,
+        pub track: u64,
+    }
+    impl AlbumFileMeta {
+        /// Derive metadata from the per-file and global user-defined pieces, plus auto-incrementing disc and track counting state.
+        /// This implements the following logic:
+        /// - if file b has metadata defined directly after file a, it will inherit file a's disc if it doesn't have one defined.
+        /// - if file b has metadata defined directly after file a, it will inherit file a's track number plus one if it doesn't have one defined.
+        /// The initial disc and track values are None and 1 respectively, as seen a [metadata::GroupFile::from_user]
+        pub fn from_user(
+            f: super::user_defined::AlbumFileMeta,
+            g: &super::user_defined::AlbumGlobalMeta,
+
+            curr_disc: &mut Option<u64>,
+            curr_track: &mut u64,
+        ) -> Self {
+            let mut meta_disc = f.disc.or_else(|| g.disc.clone());
+            if meta_disc.is_some() {
+                *curr_disc = meta_disc;
+            } else {
+                meta_disc = *curr_disc;
+            }
+
+            let meta_track = match f.track {
+                Some(t) => {
+                    *curr_track = t;
+                    t
+                }
+                None => {
+                    let this_t = *curr_track;
+                    *curr_track += 1;
+                    this_t
+                }
+            };
+
+            Self {
+                // Always individually set
+                name: f.name,
+
+                // Set by interaction with auto-incrementer
+                track: meta_track,
+
+                artists: f
+                    .artists
+                    .or_else(|| g.artists.clone())
+                    .unwrap_or_else(Vec::new),
+                genres: f
+                    .genres
+                    .or_else(|| g.genres.clone())
+                    .unwrap_or_else(Vec::new),
+                album: f.album.or_else(|| g.album.clone()),
+                album_artists: f
+                    .album_artists
+                    .or_else(|| g.album_artists.clone())
+                    .unwrap_or_else(Vec::new),
+                num_discs: f.num_discs.or_else(|| g.num_discs.clone()),
+                disc: meta_disc,
+                num_tracks: f.num_tracks.or_else(|| g.num_tracks.clone()),
+            }
+        }
     }
 
-    #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-    pub struct AlbumInputSongOverride {
-        pub file_rel_path: String,
-        pub override_metadata: Option<metadata::song::Override>,
-        pub override_disc_idx: Option<u64>,
-        pub override_track_idx: Option<u64>,
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct CompilationFileMeta {
+        /// Likely to be set
+        pub name: String,
+        pub artists: Vec<String>,
+        pub genres: Vec<String>,
+
+        /// Generally album-related, but might still be set
+        pub album: Option<String>,
+        pub album_artists: Vec<String>,
+        pub num_discs: Option<u64>,
+        pub disc: Option<u64>,
+        pub num_tracks: Option<u64>,
+        pub track: Option<u64>,
+    }
+    impl CompilationFileMeta {
+        /// Returns (file meta, idx)
+        pub fn from_user(
+            f: super::user_defined::CompilationFileMeta,
+            g: &super::user_defined::CompilationGlobalMeta,
+        ) -> (Self, Option<u64>) {
+            (
+                Self {
+                    // Always individually set
+                    name: f.name,
+                    track: f.track,
+
+                    artists: f
+                        .artists
+                        .or_else(|| g.artists.clone())
+                        .unwrap_or_else(Vec::new),
+                    genres: f
+                        .genres
+                        .or_else(|| g.genres.clone())
+                        .unwrap_or_else(Vec::new),
+                    album: f.album.or_else(|| g.album.clone()),
+                    album_artists: f
+                        .album_artists
+                        .or_else(|| g.album_artists.clone())
+                        .unwrap_or_else(Vec::new),
+                    num_discs: f.num_discs.or_else(|| g.num_discs.clone()),
+                    disc: f.disc.or_else(|| g.disc.clone()),
+                    num_tracks: f.num_tracks.or_else(|| g.num_tracks.clone()),
+                },
+                f.sort_by_idx,
+            )
+        }
     }
 }
 
 /// Data types for metadata, both cached and overridden by users.
-pub mod metadata {
+/*pub mod metadata {
     use super::*;
 
     pub struct CachedArtist {
@@ -191,9 +507,18 @@ pub mod metadata {
         }
 
         #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-        pub struct Override {
-            pub song_title: Option<String>,
-            pub song_artists: Option<Vec<String>>,
+        pub struct CompilationOverride {
+            pub title: Option<String>,
+            pub artists: Option<Vec<String>>,
+            pub position: Option<u64>,
+        }
+
+        #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+        pub struct AlbumOverride {
+            pub title: Option<String>,
+            pub artists: Option<Vec<String>>,
+            pub disc: Option<u64>,
+            pub track: Option<u64>,
         }
 
         pub struct Cached {
@@ -227,8 +552,6 @@ pub mod metadata {
         pub struct Override {
             pub album_title: Option<String>,
             pub album_artists: Option<Vec<String>>,
-            pub fixed_disc_idx: Option<u64>,
-            pub offset_track_idx: Option<i64>,
         }
 
         pub struct Cached {
@@ -236,293 +559,11 @@ pub mod metadata {
             pub artists: Vec<CachedArtist>,
         }
     }
-}
-
+}*/
 // struct FileId {
 //     /// '/' coded path relative to the library config TOML file being read, NOT to the group TOML file.
 //     pub path: String,
 //     /// Base64 encoded SHA256 digest of the file, used for integrity checks
 //     pub hash: String,
 // }
-
 pub mod native_metadata;
-
-pub struct CompilationInputGroup<F: Fs> {
-    origin: user_defined::Origin,
-    scan_filter: Option<user_defined::ScanFilter>,
-    title: String,
-    song_files: Vec<CompilationInputSong<F>>,
-}
-
-pub struct CompilationInputSong<F: Fs> {
-    file: F::PathBuf,
-    origin_mbid: Option<MbId>,
-    override_metadata: Option<metadata::song::Override>,
-
-    derived_metadata_src: Option<metadata::song::CompilationDerivedMetadataSource>,
-    cached_metadata: Option<metadata::song::Cached>,
-    native_metadata: NativeMetadata,
-}
-
-impl<F: Fs> CompilationInputGroup<F> {
-    pub fn new(
-        fs: &F,
-        root_path: &F::Path,
-
-        origin: Origin,
-        scan_filter: Option<ScanFilter>,
-        title: String,
-        songs: Vec<CompilationInputSongOverride>,
-
-        non_rel_song_paths: Vec<F::PathBuf>,
-    ) -> Self {
-        // Build a set of song information for all songs scanned
-        let mut mapping = HashMap::new();
-        // sort music_files by path alphanumeric descending, this is the first step of the ordering.
-        let mut rel_song_paths = non_rel_song_paths
-            .into_iter()
-            .map(|p| {
-                mapping.insert(
-                    p.clone(),
-                    CompilationInputSong {
-                        file: p.clone(),
-                        origin_mbid: None,
-                        override_metadata: None,
-                        derived_metadata_src: None,
-                        cached_metadata: None,
-                        native_metadata: fs.parse_native_metadata(&p).unwrap_or_default(), // TODO log errors
-                    },
-                );
-                (fs.strip_prefix(&p, root_path)
-                    .expect("non_rel_song_paths had a path that wasn't prefixed with the parent")
-                    .to_owned())
-            })
-            // uniquify
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .collect::<Vec<_>>();
-        rel_song_paths.sort();
-
-        if mapping.len() != rel_song_paths.len() {
-            panic!("rel_song_paths had duplicates");
-        }
-
-        // For each override:
-        for s in songs {
-            let path = F::PathBuf::parse_path_from_str(&s.file_rel_path);
-
-            // - apply the reordering if present. we want to apply the reorderings in file order so it makes sense to the user.
-            // TODO does this make sense or is it just confusing? it will be stable but if the user asks for "z is 5, y is 4, x is 3" they will/will not get the exact indices they want
-            match s.override_position {
-                Some(override_pos) => {
-                    let existing_pos = rel_song_paths.iter().position(|p| *p == path).expect("CompilationInputGroup file contained an override for a file that isn't in the compilation");
-                    // if we need to, reorder by shifting things up and down.
-                    if existing_pos < override_pos {
-                        (&mut rel_song_paths[existing_pos..=override_pos]).rotate_left(1);
-                    } else if existing_pos > override_pos {
-                        (&mut rel_song_paths[override_pos..=existing_pos]).rotate_right(1);
-                    }
-                }
-                None => {}
-            };
-
-            // - update the mapping with the override information
-            let s_mapping = mapping.get_mut(&path);
-            match s_mapping {
-                None => panic!(
-                    "CompilationInputGroup referred to song {:?} not present",
-                    path
-                ),
-                Some(s_mapping) => {
-                    // Merge in the data from the mapping
-                    // TODO how to handle partial metadata? Maybe disable merging?
-                    if s.origin_mbid.is_some() {
-                        s_mapping.origin_mbid = s.origin_mbid;
-                    }
-                    if s.override_metadata.is_some() {
-                        s_mapping.override_metadata = s.override_metadata;
-                    }
-                }
-            }
-        }
-
-        // pull the data out of the mapping, ordered by the final ordering of rel_song_paths
-        CompilationInputGroup {
-            origin,
-            scan_filter,
-            title,
-            song_files: rel_song_paths
-                .into_iter()
-                .map(|p| {
-                    mapping
-                        .remove(&p)
-                        .expect("Removing from a list that was populated with mapping")
-                })
-                .collect(),
-        }
-    }
-}
-
-pub struct AlbumInputGroup<F: Fs> {
-    origin: user_defined::Origin,
-    override_metadata: Option<metadata::album::Override>,
-    scan_filter: Option<user_defined::ScanFilter>,
-    album_art: Option<F::PathBuf>,
-
-    song_files: Vec<AlbumInputSong<F>>,
-
-    derived_metadata: Option<metadata::album::DerivedMetadataSource>,
-    cached_metadata: Option<(metadata::album::Cached, Vec<metadata::song::Cached>)>,
-}
-pub struct AlbumInputSong<F: Fs> {
-    file: F::PathBuf,
-    override_metadata: Option<metadata::song::Override>,
-    native_metadata: NativeMetadata,
-
-    adjusted_disc_idx: u64,
-    adjusted_track_idx: u64,
-}
-impl<F: Fs> AlbumInputGroup<F> {
-    pub fn computed_name(&self) -> Option<&String> {
-        // TODO fall back to individual song native_metadata Album title
-        self.override_metadata
-            .as_ref()
-            .map(|o| o.album_title.as_ref())
-            .flatten()
-            .or_else(|| self.cached_metadata.as_ref().map(|c| &c.0.title))
-    }
-    pub fn computed_group_key(&self) -> Option<OutputGroupKey> {
-        self.origin
-            .mb_release_id
-            .as_ref()
-            .map(|id| OutputGroupKey::AlbumByMusicBrainz(id.clone()))
-            .or_else(|| {
-                self.derived_metadata
-                    .as_ref()
-                    .map(|d| {
-                        d.mb_release_group_and_release_ids
-                            .as_ref()
-                            .map(|(rg_id, r_id)| OutputGroupKey::AlbumByMusicBrainz(r_id.clone()))
-                    })
-                    .flatten()
-            })
-            .or_else(|| {
-                self.computed_name()
-                    .map(|s| OutputGroupKey::AlbumByName(s.clone()))
-            })
-    }
-
-    pub fn new(
-        fs: &F,
-        root_path: &F::Path,
-
-        origin: Origin,
-        override_metadata: Option<metadata::album::Override>,
-        scan_filter: Option<ScanFilter>,
-        album_art: Option<String>,
-        songs: Vec<AlbumInputSongOverride>,
-
-        non_rel_song_paths: Vec<F::PathBuf>,
-    ) -> Self {
-        // Build a set of song information for all songs scanned
-        let mut override_mapping = HashMap::new();
-
-        for s in songs {
-            let path = F::PathBuf::parse_path_from_str(&s.file_rel_path);
-
-            // - update the mapping with the override information
-            let s_mapping = override_mapping.get_mut(&path);
-            match s_mapping {
-                None => {
-                    override_mapping.insert(path, s);
-                }
-                Some(s_mapping) => {
-                    // Merge in the data from the mapping
-                    // TODO how to handle partial metadata? Maybe disable merging?
-                    if s.override_metadata.is_some() {
-                        s_mapping.override_metadata = s.override_metadata;
-                    }
-                    if s.override_disc_idx.is_some() {
-                        s_mapping.override_disc_idx = s.override_disc_idx;
-                    }
-                    if s.override_track_idx.is_some() {
-                        s_mapping.override_track_idx = s.override_track_idx;
-                    }
-                }
-            }
-        }
-
-        let mut native_metadata_mapping = HashMap::new();
-
-        // sort music_files by path alphanumeric descending, this is the first step of the ordering.
-        // at the same time, build a mapping for the native metadata
-        let mut rel_song_paths = non_rel_song_paths
-            .into_iter()
-            .map(|p| {
-                let unprefixed_p = fs
-                    .strip_prefix(&p, root_path)
-                    .expect("non_rel_song_paths had a path that wasn't prefixed with the parent")
-                    .to_owned();
-                native_metadata_mapping.insert(
-                    unprefixed_p.clone(),
-                    fs.parse_native_metadata(&p).unwrap_or_default(), // TODO log errors
-                );
-                unprefixed_p
-            })
-            // uniquify
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .collect::<Vec<_>>();
-        rel_song_paths.sort();
-
-        // For each override:
-        let mut adjusted_disc_idx = 1;
-        let mut adjusted_track_idx = 0;
-        let song_files = rel_song_paths
-            .into_iter()
-            .map(|r| {
-                adjusted_track_idx += 1;
-                let override_metadata = match override_mapping.remove(&r) {
-                    Some(s) => {
-                        if let Some(d) = s.override_disc_idx {
-                            adjusted_disc_idx = d;
-                        }
-                        if let Some(t) = s.override_track_idx {
-                            adjusted_track_idx = t;
-                        }
-                        s.override_metadata
-                    }
-                    None => None,
-                };
-                let native_metadata = native_metadata_mapping
-                    .remove(&r)
-                    .expect("This must have been built, we know rel_song_paths doesn't have dupes");
-                AlbumInputSong {
-                    file: r,
-                    override_metadata,
-                    native_metadata,
-                    adjusted_disc_idx,
-                    adjusted_track_idx,
-                }
-            })
-            .collect();
-
-        if override_mapping.len() > 0 {
-            panic!(
-                "Overrode some songs that weren't found: {:?}",
-                override_mapping
-            );
-        }
-
-        // pull the data out of the mapping, ordered by the final ordering of rel_song_paths
-        AlbumInputGroup {
-            origin,
-            override_metadata,
-            scan_filter,
-            album_art: album_art.map(|s| F::PathBuf::parse_path_from_str(&s)),
-            song_files,
-            derived_metadata: None,
-            cached_metadata: None,
-        }
-    }
-}

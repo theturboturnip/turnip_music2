@@ -5,9 +5,9 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.100"
-async-trait = "0.1.89"
 # chromaprint = "0.2.0"
 id3 = "1.16.4"
+indexmap = { version = "2.14.0", features = ["std", "serde"] }
 metaflac = "0.2.8"
 mp4ameta = "0.13.0"
 #discid = "0.7.0"
