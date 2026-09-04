@@ -9,7 +9,8 @@ pub trait FsPathBuf<Path: ?Sized>:
     Clone + Hash + Debug + PartialEq + Eq + PartialOrd + Ord
 {
     fn parse_path_from_str(s: &str) -> Self;
-    fn joined<P: AsRef<Path>>(self, p: P) -> Self;
+    /// Return the path, having added one or more components as parsed from the argument.
+    fn joined(self, p: &str) -> Self;
 }
 
 /// Minimal trait encoding only the necessary components of a filesystem scanner.
@@ -31,12 +32,27 @@ pub trait Fs {
         prefix: P,
     ) -> anyhow::Result<&'a Self::Path>;
 
+    // TODO parsers should use warnings not anyhow
     fn parse_native_metadata<P: AsRef<Self::Path>>(
         &self,
         path: P,
     ) -> anyhow::Result<NativeMetadata>;
-    fn parse_config_file<P: AsRef<Self::Path>>(&self, path: P) -> anyhow::Result<ConfigFile>;
-    fn parse_group_file<P: AsRef<Self::Path>>(&self, path: P) -> anyhow::Result<GroupFile>;
+    fn parse_config_file<P: AsRef<Self::Path>>(
+        &self,
+        path: P,
+    ) -> anyhow::Result<(toml_edit::DocumentMut, ConfigFile)>;
+    fn parse_group_file<P: AsRef<Self::Path>>(
+        &self,
+        path: P,
+    ) -> anyhow::Result<(toml_edit::DocumentMut, GroupFile)>;
+
+    fn write_config_file<P: AsRef<Self::Path>>(&self, path: P, c: ConfigFile)
+    -> anyhow::Result<()>;
+    fn write_toml_file<P: AsRef<Self::Path>>(
+        &self,
+        path: P,
+        doc: toml_edit::DocumentMut,
+    ) -> anyhow::Result<()>;
 }
 
 pub struct StdFs;
@@ -46,8 +62,8 @@ impl FsPathBuf<std::path::Path> for std::path::PathBuf {
         std::path::PathBuf::from(s)
     }
 
-    fn joined<P: AsRef<std::path::Path>>(mut self, p: P) -> Self {
-        std::path::PathBuf::push(&mut self, p);
+    fn joined(mut self, p: &str) -> Self {
+        std::path::PathBuf::push(&mut self, std::path::PathBuf::from(p));
         self
     }
 }
@@ -96,13 +112,40 @@ impl Fs for StdFs {
     ) -> anyhow::Result<NativeMetadata> {
         Ok(NativeMetadataFormat::parse_from_file(path.as_ref())?)
     }
-    fn parse_config_file<P: AsRef<Self::Path>>(&self, path: P) -> anyhow::Result<ConfigFile> {
+    fn parse_config_file<P: AsRef<Self::Path>>(
+        &self,
+        path: P,
+    ) -> anyhow::Result<(toml_edit::DocumentMut, ConfigFile)> {
         let data = std::fs::read_to_string(path)?;
         ConfigFile::from_str(&data)
     }
-    fn parse_group_file<P: AsRef<Self::Path>>(&self, path: P) -> anyhow::Result<GroupFile> {
+    fn parse_group_file<P: AsRef<Self::Path>>(
+        &self,
+        path: P,
+    ) -> anyhow::Result<(toml_edit::DocumentMut, GroupFile)> {
         let data = std::fs::read_to_string(path)?;
         GroupFile::from_str(&data)
+    }
+
+    fn write_config_file<P: AsRef<Self::Path>>(
+        &self,
+        path: P,
+        c: ConfigFile,
+    ) -> anyhow::Result<()> {
+        std::fs::write(
+            path.as_ref(),
+            toml_edit::ser::to_string_pretty(&c)?.as_bytes(),
+        )?;
+        Ok(())
+    }
+
+    fn write_toml_file<P: AsRef<Self::Path>>(
+        &self,
+        path: P,
+        doc: toml_edit::DocumentMut,
+    ) -> anyhow::Result<()> {
+        std::fs::write(path.as_ref(), doc.to_string().as_bytes())?;
+        Ok(())
     }
 }
 
@@ -118,6 +161,7 @@ pub mod test {
     use std::{ffi::OsStr, path::PathBuf};
 
     use anyhow::bail;
+    use indexmap::IndexMap;
     use string_literals::{s, string_vec};
 
     use crate::data_model::{
@@ -137,9 +181,8 @@ pub mod test {
             s.split("/").map(|s| s.to_owned()).collect()
         }
 
-        fn joined<P: AsRef<[String]>>(mut self, p: P) -> Self {
-            let p = p.as_ref();
-            self.extend(p.into_iter().map(|s| s.clone()));
+        fn joined(mut self, p: &str) -> Self {
+            self.extend(Self::parse_path_from_str(p));
             self
         }
     }
@@ -241,23 +284,45 @@ pub mod test {
             path: P,
         ) -> anyhow::Result<NativeMetadata> {
             match self.traverse(path)? {
-                TestFs::MusicFile(native, _) => Ok((*native).clone()),
+                TestFs::MusicFile(native, _) => Ok(native.clone()),
                 _ => bail!("not a music file, no metadata found"),
             }
         }
 
-        fn parse_config_file<P: AsRef<Self::Path>>(&self, path: P) -> anyhow::Result<ConfigFile> {
+        fn parse_config_file<P: AsRef<Self::Path>>(
+            &self,
+            path: P,
+        ) -> anyhow::Result<(toml_edit::DocumentMut, ConfigFile)> {
             match self.traverse(path)? {
                 TestFs::TextFile(contents) => ConfigFile::from_str(&contents),
                 _ => bail!("not a music file, no metadata found"),
             }
         }
 
-        fn parse_group_file<P: AsRef<Self::Path>>(&self, path: P) -> anyhow::Result<GroupFile> {
+        fn parse_group_file<P: AsRef<Self::Path>>(
+            &self,
+            path: P,
+        ) -> anyhow::Result<(toml_edit::DocumentMut, GroupFile)> {
             match self.traverse(path)? {
                 TestFs::TextFile(contents) => GroupFile::from_str(&contents),
                 _ => bail!("not a music file, no metadata found"),
             }
+        }
+
+        fn write_config_file<P: AsRef<Self::Path>>(
+            &self,
+            path: P,
+            c: ConfigFile,
+        ) -> anyhow::Result<()> {
+            todo!()
+        }
+
+        fn write_toml_file<P: AsRef<Self::Path>>(
+            &self,
+            path: P,
+            doc: toml_edit::DocumentMut,
+        ) -> anyhow::Result<()> {
+            todo!()
         }
     }
 
@@ -320,11 +385,11 @@ name="song1"
                                 name: Some(s!("song1-mp3meta")),
                                 album: None,
                                 album_artists: vec![],
-                                artist: vec![],
+                                artists: vec![],
                                 num_discs: None,
-                                disc_idx: None,
+                                disc: None,
                                 num_tracks: None,
-                                track_idx: None,
+                                track: None,
                                 genres: vec![],
                             },
                             None
@@ -392,9 +457,10 @@ name="song1"
         let file =
             debugify_error(fs.parse_config_file(PathBuf::parse_path_from_str("config.tm2.toml")));
         assert_eq!(
-            file,
+            file.map(|(doc, c)| c),
             Ok(ConfigFile {
                 search_paths: Some(string_vec!["example_album"]),
+                exports: IndexMap::new(),
             })
         );
     }
@@ -407,7 +473,7 @@ name="song1"
             fs.parse_group_file(PathBuf::parse_path_from_str("example_album/music.tm2.toml")),
         );
         assert_eq!(
-            file,
+            file.map(|(doc, g)| g),
             Ok(GroupFile::Album {
                 origin: Origin::default(),
                 album_art: None,
@@ -440,11 +506,11 @@ name="song1"
                 name: Some("song1-mp3meta".to_owned()),
                 album: None,
                 album_artists: vec![],
-                artist: vec![],
+                artists: vec![],
                 num_discs: None,
-                disc_idx: None,
+                disc: None,
                 num_tracks: None,
-                track_idx: None,
+                track: None,
                 genres: vec![],
             })
         );

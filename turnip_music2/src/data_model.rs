@@ -9,6 +9,9 @@
 //!
 //!   For example, it holds the `Origin` data on where the group came from (e.g. if it was ripped from a disc, which disc?);
 //!   and the metadata used when exporting those files.
+//!
+//!   Compilations are unsorted by default but can opt in to sorting.
+//!   Albums are sorted by (disc, track) numbers.
 //! - Source Music files, stored inside folders (recursive search) containing Group Metadata files.
 //!
 //! Loading a library consists of
@@ -25,6 +28,7 @@
 //!     - if within a Compilation Group, `<First Artist of Song>/<Song Name>`
 //!     - all path components are deduplicated if necessary with uppercase alpha "ABCDE..." postfixes.
 //!     - if any path component contains special characters the output process stops (UTF-8 allowed, but not filesystem-breakers such as NTFS `/\:*"?<>|`)
+//!     - TODO: the output restrictions and FFMPEG configs should be encoded as separate TOML files or in the library config TOML
 //! - Use FFMPEG to render out output files
 //!     - If same extension, don't bother - avoid recompressing MP3->MP3? TODO add config option for that
 //!     - If same input file hash as previous (job cache?) and output file exists

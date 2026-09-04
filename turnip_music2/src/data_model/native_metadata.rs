@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{ffi::OsStr, path::Path};
 
 use id3::TagLike;
 use mp4ameta::ChplTimescale;
@@ -23,11 +23,11 @@ pub struct NativeMetadata {
     pub name: Option<String>,
     pub album: Option<String>,
     pub album_artists: Vec<String>,
-    pub artist: Vec<String>,
+    pub artists: Vec<String>,
     pub num_discs: Option<u64>,
-    pub disc_idx: Option<u64>,
+    pub disc: Option<u64>,
     pub num_tracks: Option<u64>,
-    pub track_idx: Option<u64>,
+    pub track: Option<u64>,
     pub genres: Vec<String>,
 }
 
@@ -38,11 +38,11 @@ impl Default for NativeMetadata {
             name: Default::default(),
             album: Default::default(),
             album_artists: Default::default(),
-            artist: Default::default(),
+            artists: Default::default(),
             num_discs: Default::default(),
-            disc_idx: Default::default(),
+            disc: Default::default(),
             num_tracks: Default::default(),
-            track_idx: Default::default(),
+            track: Default::default(),
             genres: Default::default(),
         }
     }
@@ -80,14 +80,14 @@ impl NativeMetadataFormat {
                         Some(s) => vec![s.to_string()],
                         None => vec![],
                     },
-                    artist: tag
+                    artists: tag
                         .artists()
                         .map(|v| v.into_iter().map(|s| s.to_string()).collect())
                         .unwrap_or_default(),
                     num_discs: tag.total_discs().map(Into::into),
-                    disc_idx: tag.disc().map(Into::into),
+                    disc: tag.disc().map(Into::into),
                     num_tracks: tag.total_tracks().map(Into::into),
-                    track_idx: tag.track().map(Into::into),
+                    track: tag.track().map(Into::into),
                     genres: tag
                         .genres_parsed()
                         .into_iter()
@@ -115,12 +115,12 @@ impl NativeMetadataFormat {
                     // TODO take_album_sort_order
                     album_artists: tag.take_album_artists().collect::<Vec<_>>(),
                     // TODO take album_artists_sort_orders
-                    artist: tag.take_artists().collect::<Vec<_>>(),
+                    artists: tag.take_artists().collect::<Vec<_>>(),
                     // TODO take artists_sort_orders
                     num_discs: tag.disc().1.map(Into::into),
-                    disc_idx: tag.disc().0.map(Into::into),
+                    disc: tag.disc().0.map(Into::into),
                     num_tracks: tag.track().1.map(Into::into),
-                    track_idx: tag.track().0.map(Into::into),
+                    track: tag.track().0.map(Into::into),
                     genres: tag.genres().map(str::to_string).collect(),
                 })
             }
@@ -185,11 +185,11 @@ impl NativeMetadataFormat {
                     name,
                     album,
                     album_artists: vec![],
-                    artist: artist.into_iter().collect(),
+                    artists: artist.into_iter().collect(),
                     num_discs: None,
-                    disc_idx: None,
+                    disc: None,
                     num_tracks: track_idx,
-                    track_idx: num_tracks,
+                    track: num_tracks,
                     genres,
                 })
             }

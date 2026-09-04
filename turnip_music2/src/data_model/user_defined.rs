@@ -11,14 +11,44 @@ use std::{collections::HashMap, path::Path};
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ConfigFile {
     pub search_paths: Option<Vec<String>>,
-    // pub artist_name_overrides: Option<Vec<ConfigArtistNameOverride>>,
+    pub exports: IndexMap<String, ExportParams>,
 }
 impl ConfigFile {
-    pub fn from_str(s: &str) -> anyhow::Result<ConfigFile> {
+    pub const TOML_FILE_NAME: &'static str = "library.tm2.toml";
+
+    pub fn from_str(s: &str) -> anyhow::Result<(toml_edit::DocumentMut, ConfigFile)> {
         let document = s.parse::<toml_edit::DocumentMut>()?;
-        let file = toml_edit::de::from_document(document)?;
-        Ok(file)
+        let file = toml_edit::de::from_document(document.clone())?;
+        Ok((document, file))
     }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct ExportParams {
+    /// Target output directory
+    pub output_path: String,
+    /// zero or more target output formats.
+    /// if empty, songs will never be reencoded.
+    /// otherwise, if a song is not in any listed format, it will be reencoded as the first format.
+    pub target_format: Vec<String>,
+    /// ffmpeg parameters used for reencode.
+    /// inserted within the command list as `["ffmpeg", "-i", input] + reencode_params + [output]`.
+    /// For MP3, try `["-codec:a", libmp3lame", "-qscale:a", "4"]` as suggested in [the ffmpeg documentation](https://trac.ffmpeg.org/wiki/Encode/MP3).
+    ///
+    /// Either this or target_bitrate should be set. If neither set, ffmpeg defaults will be used.
+    pub reencode_params: Option<Vec<String>>,
+    /// target bitrate for reencode.
+    /// in kilobits per second.
+    ///
+    /// Either this or reencode_params should be set. reencode_params should be preferred for greater control.
+    /// This is effectively identical to `reencode_params=["-b:a", "{target_bitrate}k"]`.
+    pub target_bitrate: Option<u64>,
+    /// songs will not be reencoded if they are already in a target format AND if their bitrate does not exceed this.
+    /// in kilobits per second
+    pub max_bitrate: Option<u64>,
+    // TODO
+    // pub target_charset: ExportCharset::NTFS,
+    // pub album_art: AlbumArtMode,
 }
 
 // #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -70,12 +100,12 @@ pub enum GroupFile {
     },
 }
 impl GroupFile {
-    pub const TOML_FILE_NAME: &'static str = "music.toml";
+    pub const TOML_FILE_NAME: &'static str = "music.tm2.toml";
 
-    pub fn from_str(s: &str) -> anyhow::Result<GroupFile> {
+    pub fn from_str(s: &str) -> anyhow::Result<(toml_edit::DocumentMut, GroupFile)> {
         let document = s.parse::<toml_edit::DocumentMut>()?;
-        let file = toml_edit::de::from_document(document)?;
-        Ok(file)
+        let file = toml_edit::de::from_document(document.clone())?;
+        Ok((document, file))
     }
 
     // pub fn scan_filter(&self) -> Option<&ScanFilter> {

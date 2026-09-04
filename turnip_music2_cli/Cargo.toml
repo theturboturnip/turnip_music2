@@ -1,22 +1,16 @@
 [package]
-name = "turnip_music2"
+name = "turnip_music2_cli"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+clap = { version = "4.6.6", features = ["derive"] }
+pretty_env_logger = "0.5.0"
+turnip_music2 = { path="../turnip_music2" }
+
 anyhow = { workspace = true }
 indexmap = { workspace = true }
 log = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }
 toml_edit = { workspace = true }
-
-# chromaprint = "0.2.0"
-id3 = "1.16.4"
-metaflac = "0.2.8"
-mp4ameta = "0.13.0"
-#discid = "0.7.0"
-musicbrainz_rs = "0.12.0"
-
-[dev-dependencies]
-string-literals = "1.0.1"

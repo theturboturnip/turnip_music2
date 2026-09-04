@@ -36,9 +36,7 @@ impl<F: Fs> GroupFile<F> {
                 let mut files = files
                     .into_iter()
                     .map(|(rel_path, file_meta)| {
-                        let full_path = root_path
-                            .to_owned()
-                            .joined(F::PathBuf::parse_path_from_str(&rel_path));
+                        let full_path = root_path.to_owned().joined(&rel_path);
 
                         let (meta, idx) = CompilationFileMeta::from_user(file_meta, &global);
 
@@ -76,9 +74,7 @@ impl<F: Fs> GroupFile<F> {
                 let mut files = files
                     .into_iter()
                     .map(|(rel_path, file_meta)| {
-                        let full_path = root_path
-                            .to_owned()
-                            .joined(F::PathBuf::parse_path_from_str(&rel_path));
+                        let full_path = root_path.to_owned().joined(&rel_path);
 
                         let meta =
                             AlbumFileMeta::from_user(file_meta, &global, &mut disc, &mut track);
@@ -100,11 +96,9 @@ impl<F: Fs> GroupFile<F> {
                 // pull the data out of the mapping, ordered by the final ordering of rel_song_paths
                 GroupFile::Album {
                     origin,
-                    album_art: album_art.as_ref().map(|rel_path| {
-                        root_path
-                            .to_owned()
-                            .joined(F::PathBuf::parse_path_from_str(&rel_path))
-                    }),
+                    album_art: album_art
+                        .as_ref()
+                        .map(|rel_path| root_path.to_owned().joined(&rel_path)),
                     files,
                 }
             }
