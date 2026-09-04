@@ -24,6 +24,7 @@ pub trait Fs {
     ) -> anyhow::Result<impl Iterator<Item = anyhow::Result<Self::PathBuf>>>;
     fn path_trailing<'p>(&self, path: &'p Self::Path) -> Option<&'p OsStr>;
     fn path_ext<'p>(&self, path: &'p Self::Path) -> Option<&'p OsStr>;
+    fn path_parent_dir<'p>(&self, path: &'p Self::Path) -> Option<Self::PathBuf>;
     fn is_file<P: AsRef<Self::Path>>(&self, path: P) -> bool;
     fn is_dir<P: AsRef<Self::Path>>(&self, path: P) -> bool;
     fn strip_prefix<'a, P: AsRef<Self::Path>>(
@@ -46,10 +47,8 @@ pub trait Fs {
         path: P,
     ) -> anyhow::Result<(toml_edit::DocumentMut, GroupFile)>;
 
-    fn write_config_file<P: AsRef<Self::Path>>(&self, path: P, c: ConfigFile)
-    -> anyhow::Result<()>;
     fn write_toml_file<P: AsRef<Self::Path>>(
-        &self,
+        &mut self,
         path: P,
         doc: toml_edit::DocumentMut,
     ) -> anyhow::Result<()>;
@@ -98,6 +97,10 @@ impl Fs for StdFs {
         path.extension()
     }
 
+    fn path_parent_dir<'p>(&self, path: &'p Self::Path) -> Option<Self::PathBuf> {
+        path.parent().map(|p| p.to_owned())
+    }
+
     fn strip_prefix<'a, P: AsRef<Self::Path>>(
         &self,
         path_buf: &'a Self::PathBuf,
@@ -127,20 +130,8 @@ impl Fs for StdFs {
         GroupFile::from_str(&data)
     }
 
-    fn write_config_file<P: AsRef<Self::Path>>(
-        &self,
-        path: P,
-        c: ConfigFile,
-    ) -> anyhow::Result<()> {
-        std::fs::write(
-            path.as_ref(),
-            toml_edit::ser::to_string_pretty(&c)?.as_bytes(),
-        )?;
-        Ok(())
-    }
-
     fn write_toml_file<P: AsRef<Self::Path>>(
-        &self,
+        &mut self,
         path: P,
         doc: toml_edit::DocumentMut,
     ) -> anyhow::Result<()> {

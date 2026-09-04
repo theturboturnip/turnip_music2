@@ -4,6 +4,7 @@ use crate::warning::{Warning, WarningSender};
 use std::collections::HashSet;
 use std::ffi::{OsStr, OsString};
 
+#[derive(Debug, Clone)]
 pub struct Group<F: Fs> {
     path: F::PathBuf,
     doc: toml_edit::DocumentMut,

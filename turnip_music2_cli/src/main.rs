@@ -1,8 +1,7 @@
 use clap::Parser;
 use clap::Subcommand;
+use turnip_music2::cli::{CliContext, ImportMode};
 use turnip_music2::fs::StdFs;
-use turnip_music2_cli::CliContext;
-use turnip_music2_cli::ImportMode;
 use turnip_music2_cli::WarningLogger;
 
 #[derive(Parser)]
@@ -50,10 +49,10 @@ fn main() {
 
     let cli = Cli::parse();
 
-    let fs = StdFs {};
+    let mut fs = StdFs {};
     let mut warner = WarningLogger {};
     let res = {
-        let mut ctx = CliContext::new(cli.library, &fs, &mut warner);
+        let mut ctx = CliContext::new(cli.library, &mut fs, &mut warner);
 
         match cli.command {
             Commands::Init {

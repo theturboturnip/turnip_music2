@@ -8,14 +8,126 @@ macro_rules! test_dir {
         ])
     };
 }
+macro_rules! assert_matches {
+    ( $actual:expr, $expected:pat, $($msg:tt)* ) => {{
+        let actual = $actual;
+        if !matches!(actual, $expected) {
+            panic!("{actual:?} didn't meet condition: {}", format!($($msg)*));
+        }
+    }};
+    ( $actual:expr, $expected:pat_param if $e:expr, $($msg:tt)* ) => {{
+        let actual = $actual;
+        if let $expected = actual && ($e) {
+
+        } else {
+            panic!("{actual:?} didn't meet condition: {}", format!($($msg)*));
+        }
+    }};
+}
+macro_rules! test_path {
+    ($($msg:literal),*) => {
+        string_literals::string_vec![$($msg,)*]
+    };
+}
 
 mod init {
     use super::*;
-    use crate::tests::cli::basic_unpadded_tracks;
+    use crate::{
+        cli::{CliContext, Library},
+        tests::cli::basic_unpadded_tracks,
+        warning::Warning,
+    };
 
     #[test]
-    fn test_basic_init() {
-        let fs = basic_test_hierarchy(test_dir!(("basic", basic_unpadded_tracks()),), false);
+    fn test_basic_init_no_library_path() {
+        let mut fs = basic_test_hierarchy(
+            test_dir!(
+                ("basic", basic_unpadded_tracks()), //
+            ),
+            false,
+        );
+        let mut warner = vec![];
+
+        let library = || -> anyhow::Result<Option<Library<_>>> {
+            let mut ctx = CliContext::new(None, &mut fs, &mut warner);
+            ctx.init(vec![s!("songs")], false)?;
+            Ok(ctx.loaded_library)
+        }();
+
+        assert_matches!(
+            fs.traverse(test_path!("library.tm2.toml")),
+            Ok(TestFs::TextFile(t)) if t ==
+r#"[library]
+search_paths = ["songs"]
+"#,
+            "Library config should be correct"
+        );
+        assert_matches!(library, Ok(None), "shouldn't have loaded library");
+        assert_eq!(
+            warner,
+            vec![Warning::OrphanedSongs {
+                folder: test_path!("songs", "basic"),
+                files: vec![
+                    test_path!("songs", "basic", "1-The Biggest Fish.wav"),
+                    test_path!("songs", "basic", "2-The Next Biggest Fish.wav"),
+                    test_path!("songs", "basic", "11-Fish to the Twenty-First Order.wav"),
+                ],
+            }],
+            "should have produced orphaned songs warning"
+        );
+    }
+
+    #[test]
+    fn test_basic_init_custom_library_path() {
+        let mut fs = test_dir!(
+            (
+                "toplevel",
+                basic_test_hierarchy(
+                    test_dir!(
+                        ("basic", basic_unpadded_tracks()), //
+                    ),
+                    false,
+                )
+            ), //
+        );
+        let mut warner = vec![];
+
+        let library = || -> anyhow::Result<Option<Library<_>>> {
+            let mut ctx = CliContext::new(
+                Some(s!("toplevel/custom_library.toml")),
+                &mut fs,
+                &mut warner,
+            );
+            ctx.init(vec![s!("songs")], false)?;
+            Ok(ctx.loaded_library)
+        }();
+
+        assert_matches!(
+            fs.traverse(test_path!("toplevel", "custom_library.toml")),
+            Ok(TestFs::TextFile(t)) if t ==
+r#"[library]
+search_paths = ["songs"]
+"#,
+            "Library config should be correct"
+        );
+        assert_matches!(library, Ok(None), "shouldn't have loaded library");
+        assert_eq!(
+            warner,
+            vec![Warning::OrphanedSongs {
+                folder: test_path!("toplevel", "songs", "basic"),
+                files: vec![
+                    test_path!("toplevel", "songs", "basic", "1-The Biggest Fish.wav"),
+                    test_path!("toplevel", "songs", "basic", "2-The Next Biggest Fish.wav"),
+                    test_path!(
+                        "toplevel",
+                        "songs",
+                        "basic",
+                        "11-Fish to the Twenty-First Order.wav"
+                    ),
+                ],
+            }],
+            "should have produced orphaned songs warning"
+        );
     }
 }
 
@@ -25,7 +137,8 @@ fn basic_test_hierarchy(songs: TestFs, with_library: bool) -> TestFs {
             (
                 "library.tm2.toml",
                 TestFs::TextFile(s!(r#"
-    search_paths = ["songs"]
+[library]
+search_paths = ["songs"]
     "#))
             ),
             ("songs", songs),

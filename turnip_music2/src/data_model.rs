@@ -62,6 +62,7 @@ pub struct MbDiscId(String);
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CddbDiscId(String);
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 /// Song audio fingerprint via chromaprint, which allows lookup via MusicBrainz
 pub struct Chromaprint(/* ChromaprintAlgorithm, */ Vec<u8>);
 

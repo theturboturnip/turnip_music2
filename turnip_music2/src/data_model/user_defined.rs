@@ -9,9 +9,14 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::Path};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct ConfigFileInputs {
+    pub search_paths: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ConfigFile {
-    pub search_paths: Option<Vec<String>>,
-    pub exports: IndexMap<String, ExportParams>,
+    pub library: ConfigFileInputs,
+    pub exports: Option<IndexMap<String, ExportParams>>,
 }
 impl ConfigFile {
     pub const TOML_FILE_NAME: &'static str = "library.tm2.toml";

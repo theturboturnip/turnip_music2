@@ -1,10 +1,8 @@
 use crate::{
     data_model::{
         Chromaprint,
-        native_metadata::NativeMetadata,
-        native_metadata::NativeMetadataFormat,
-        user_defined::GroupFile,
-        user_defined::{self, AlbumFileMeta, ConfigFile, Origin},
+        native_metadata::{NativeMetadata, NativeMetadataFormat},
+        user_defined::{self, AlbumFileMeta, ConfigFile, ConfigFileInputs, GroupFile, Origin},
     },
     fs::{Fs, FsPathBuf},
 };
@@ -14,6 +12,7 @@ use anyhow::bail;
 use indexmap::IndexMap;
 use string_literals::{s, string_vec};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TestFs {
     MusicFile(NativeMetadata, Option<Chromaprint>),
     TextFile(String),
@@ -36,7 +35,11 @@ impl FsPathBuf<[String]> for Vec<String> {
 }
 
 impl TestFs {
-    fn traverse<'s, P: AsRef<<Self as Fs>::Path>>(&'s self, path: P) -> anyhow::Result<&'s TestFs> {
+    // TODO these functions shouldn't be recursive, it discards information
+    pub fn traverse<'s, P: AsRef<<Self as Fs>::Path>>(
+        &'s self,
+        path: P,
+    ) -> anyhow::Result<&'s TestFs> {
         // TODO absolute path support
         let path = path.as_ref();
         match (self, &path) {
@@ -56,6 +59,47 @@ impl TestFs {
             }
             (_, &[next_comp, ..]) => {
                 bail!("tried to traverse into {next_comp}, which is not a directory")
+            }
+        }
+    }
+
+    pub fn overwrite<'s, P: AsRef<<Self as Fs>::Path>>(
+        &mut self,
+        path: P,
+        file: TestFs,
+    ) -> anyhow::Result<()> {
+        // TODO absolute path support
+        let path = path.as_ref();
+        // Reborrow https://users.rust-lang.org/t/matching-on-mut-self-without-moving-it/101411
+        match (&mut *self, &path) {
+            (entry, &[]) => bail!("can't overwrite, empty path"),
+            (TestFs::Dir(entries), &[name]) => {
+                let mut inserted = false;
+                for (subpath, entry) in entries.iter_mut() {
+                    if subpath == name {
+                        *entry = file;
+                        return Ok(());
+                    }
+                }
+                entries.push((name.clone(), file));
+                Ok(())
+            }
+            (entry, &[name]) => bail!("can't overwrite, containing level was not a directory"),
+            // local paths (".." not supported)
+            (TestFs::Dir(entries), &[next_comp, ..]) if next_comp == "." => {
+                return self.overwrite(&path[1..], file);
+            }
+            (TestFs::Dir(entries), &[next_comp, ..]) => {
+                // Recurse on the next element
+                for (subpath, entry) in entries.iter_mut() {
+                    if subpath == next_comp {
+                        return entry.overwrite(&path[1..], file);
+                    }
+                }
+                bail!("can't overwrite, no such entry {next_comp} in directory")
+            }
+            (_, &[next_comp, ..]) => {
+                bail!("tried to overwrite into {next_comp}, which is not a directory")
             }
         }
     }
@@ -94,6 +138,11 @@ impl Fs for TestFs {
             .last()
             .map(|comp| comp.rsplit('.').next().map(|ext| OsStr::new(ext)))
             .flatten()
+    }
+    fn path_parent_dir<'p>(&self, path: &'p Self::Path) -> Option<Self::PathBuf> {
+        path.as_ref()
+            .split_last()
+            .map(|(last, prelast)| prelast.to_vec())
     }
 
     fn is_file<P: AsRef<Self::Path>>(&self, path: P) -> bool {
@@ -154,20 +203,13 @@ impl Fs for TestFs {
         }
     }
 
-    fn write_config_file<P: AsRef<Self::Path>>(
-        &self,
-        path: P,
-        c: ConfigFile,
-    ) -> anyhow::Result<()> {
-        todo!()
-    }
-
     fn write_toml_file<P: AsRef<Self::Path>>(
-        &self,
+        &mut self,
         path: P,
         doc: toml_edit::DocumentMut,
     ) -> anyhow::Result<()> {
-        todo!()
+        let string = doc.to_string();
+        self.overwrite(path, TestFs::TextFile(string))
     }
 }
 
@@ -194,6 +236,7 @@ fn test_hierarchy() -> TestFs {
             "config.tm2.toml",
             TestFs::TextFile(
                 r#"
+[library]
 search_paths=["example_album"]
 "#
                 .to_string()
@@ -304,8 +347,10 @@ fn test_config_file() {
     assert_eq!(
         file.map(|(doc, c)| c),
         Ok(ConfigFile {
-            search_paths: Some(string_vec!["example_album"]),
-            exports: IndexMap::new(),
+            library: ConfigFileInputs {
+                search_paths: string_vec!["example_album"],
+            },
+            exports: None,
         })
     );
 }
