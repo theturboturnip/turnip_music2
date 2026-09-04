@@ -359,3 +359,19 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
         Ok(())
     }
 }
+
+pub struct WarningLogger();
+impl<PathBuf: Clone + PartialEq + Eq + std::fmt::Debug> WarningSender<PathBuf> for WarningLogger {
+    fn warn(&mut self, w: Warning<PathBuf>) {
+        match &w {
+            Warning::LibraryTomlParseFail { .. }
+            | Warning::GroupTomlParseFail { .. }
+            | Warning::GroupTomlAlreadyExists { .. }
+            // | Warning::CannotInitLibraryToml { ..
+                => {
+                log::error!("{w:?}")
+            }
+            Warning::OrphanedSongs { .. } | Warning::CompilationMayBeAnAlbum { .. } | Warning::AlbumMayBeACompilation { .. } => log::warn!("{w:?}"),
+        }
+    }
+}

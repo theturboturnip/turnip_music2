@@ -5,3 +5,6 @@ pub mod fs;
 pub mod resolver;
 pub mod scanner;
 pub mod warning;
+
+#[cfg(test)]
+mod tests;

@@ -1,9 +1,9 @@
 use clap::Parser;
 use clap::Subcommand;
 use turnip_music2::fs::StdFs;
-use turnip_music2::warning::WarningLogger;
 use turnip_music2_cli::CliContext;
 use turnip_music2_cli::ImportMode;
+use turnip_music2_cli::WarningLogger;
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]

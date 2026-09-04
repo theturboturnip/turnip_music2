@@ -1691,7 +1691,6 @@ dependencies = [
  "anyhow",
  "id3",
  "indexmap",
- "log",
  "metaflac",
  "mp4ameta",
  "musicbrainz_rs",

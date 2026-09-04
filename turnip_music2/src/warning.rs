@@ -1,15 +1,22 @@
 use std::collections::HashSet;
 
+/// Structure for testable warnings.
+/// Whenever there are non-fatal messages to surface to the viewer, use this enum and pipe them into a [WarningSender].
+/// In testing contexts, a Vec<Warning> can be used as a sender and then tests can compare the warnings to the outcome.
+/// At runtime, a different impl can log the warnings and surface them to the user as human-readable messages.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Warning<PathBuf: Clone + PartialEq + Eq> {
+    /// Could not parse a library TOML file
     LibraryTomlParseFail {
         path: PathBuf,
         // TODO error
     },
+    /// Could not parse a group TOML file
     GroupTomlParseFail {
         path: PathBuf,
         // TODO error
     },
+    /// Found song files in folders that do not have a group TOML
     OrphanedSongs {
         folder: PathBuf,
         files: Vec<PathBuf>,
@@ -32,21 +39,5 @@ pub trait WarningSender<PathBuf: Clone + PartialEq + Eq> {
 impl<PathBuf: Clone + PartialEq + Eq> WarningSender<PathBuf> for Vec<Warning<PathBuf>> {
     fn warn(&mut self, w: Warning<PathBuf>) {
         self.push(w);
-    }
-}
-
-pub struct WarningLogger();
-impl<PathBuf: Clone + PartialEq + Eq + std::fmt::Debug> WarningSender<PathBuf> for WarningLogger {
-    fn warn(&mut self, w: Warning<PathBuf>) {
-        match &w {
-            Warning::LibraryTomlParseFail { .. }
-            | Warning::GroupTomlParseFail { .. }
-            | Warning::GroupTomlAlreadyExists { .. }
-            // | Warning::CannotInitLibraryToml { ..
-                => {
-                log::error!("{w:?}")
-            }
-            Warning::OrphanedSongs { .. } | Warning::CompilationMayBeAnAlbum { .. } | Warning::AlbumMayBeACompilation { .. } => log::warn!("{w:?}"),
-        }
     }
 }
