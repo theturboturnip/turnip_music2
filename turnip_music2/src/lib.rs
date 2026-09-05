@@ -8,6 +8,7 @@ pub mod resolver;
 pub mod scanner;
 /// Types and convenience functions for editing TOML
 pub mod toml;
+pub mod util;
 pub mod warning;
 
 #[cfg(test)]

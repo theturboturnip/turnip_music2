@@ -141,6 +141,9 @@ mod import {
         warning::Warning,
     };
 
+    /// Test the imports of albums with well-behaved metadata produce usable TOML.
+    /// Ensure that track numbers are elided completely in the happy path.
+    /// Ensure that many imports always lead to groups being sorted in the library.
     #[test]
     fn test_import_happy_cd_rips_as_albums() {
         let mut fs = basic_test_hierarchy(
@@ -354,6 +357,201 @@ title = "Track 4"
                 ),
             ],
             "output tracks for souvenir should match",
+        );
+    }
+
+    /// Make sure that fields with zero-padding get auto-sorted the same way as fields without.
+    #[test]
+    fn test_zero_padded_and_unpadded_imports_identical() {
+        let mut fs = basic_test_hierarchy(
+            test_dir!(
+                ("unpadded", basic_unpadded_tracks()),      //
+                ("zeropadded", basic_zero_padded_tracks()), //
+            ),
+            true,
+        );
+        let mut warner = vec![];
+
+        let library = || -> anyhow::Result<Option<Library<_>>> {
+            let mut ctx = CliContext::new(None, &mut fs, &mut warner);
+            ctx.import(
+                &vec![s!("songs/unpadded"), s!("songs/zeropadded")],
+                None,
+                true,
+                crate::cli::ImportMode::Album,
+            )?;
+            ctx.reload_library()?;
+            Ok(ctx.loaded_library)
+        }();
+
+        assert_eq!(warner, vec![]);
+
+        // "1-The Biggest Fish.wav",
+        // "2-The Next Biggest Fish.wav",
+        // "11-Fish to the Twenty-First Order.wav",
+
+        assert_matches!(
+            fs.traverse(test_path!("songs", "unpadded", "music.tm2.toml")),
+            Ok(TestFs::TextFile(t)) if t ==
+r#"type = "Album"
+
+[origin]
+
+[global]
+
+[files."1-The Biggest Fish.wav"]
+title = "1-The Biggest Fish"
+
+[files."2-The Next Biggest Fish.wav"]
+title = "2-The Next Biggest Fish"
+
+[files."11-Fish to the Twenty-First Order.wav"]
+title = "11-Fish to the Twenty-First Order"
+"#,
+            "Unpadded config should be correct"
+        );
+        assert_matches!(
+            fs.traverse(test_path!("songs", "zeropadded", "music.tm2.toml")),
+            Ok(TestFs::TextFile(t)) if t ==
+r#"type = "Album"
+
+[origin]
+
+[global]
+
+[files."01-The Biggest Fish.wav"]
+title = "01-The Biggest Fish"
+
+[files."02-The Next Biggest Fish.wav"]
+title = "02-The Next Biggest Fish"
+
+[files."11-Fish to the Twenty-First Order.wav"]
+title = "11-Fish to the Twenty-First Order"
+"#,
+            "Zeropadded config should be correct"
+        );
+
+        assert_matches!(
+            library,
+            Ok(Some(Library {
+                config_file,
+                group_files
+            })),
+            "library must have been made successfully"
+        );
+        let group_files = library.unwrap().unwrap().group_files;
+        assert_eq!(group_files.len(), 2, "should have found both groups");
+        assert_eq!(
+            group_files[0].toml_path,
+            test_path!("songs", "unpadded", "music.tm2.toml"),
+            "unpadded should come first (alphabetical sorting)"
+        );
+        assert_matches!(
+            group_files[0],
+            Group {
+                parsed: parsed::GroupFile::Album { files: actual, .. },
+                ..
+            } if actual == &vec![
+                (
+                    test_path!("songs", "unpadded", "1-The Biggest Fish.wav"),
+                    parsed::AlbumFileMeta {
+                        title: s!("1-The Biggest Fish"),
+                        artists: vec![],
+                        genres: vec![],
+                        album: None,
+                        album_artists: vec![],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: 1
+                    }
+                ),
+                (
+                    test_path!("songs", "unpadded", "2-The Next Biggest Fish.wav"),
+                    parsed::AlbumFileMeta {
+                        title: s!("2-The Next Biggest Fish"),
+                        artists: vec![],
+                        genres: vec![],
+                        album: None,
+                        album_artists: vec![],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: 2,
+                    }
+                ),
+                (
+                    test_path!("songs", "unpadded", "11-Fish to the Twenty-First Order.wav"),
+                    parsed::AlbumFileMeta {
+                        title: s!("11-Fish to the Twenty-First Order"),
+                        artists: vec![],
+                        genres: vec![],
+                        album: None,
+                        album_artists: vec![],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: 3,
+                    }
+                ),
+            ],
+            "output tracks for unpadded should match",
+        );
+        assert_eq!(
+            group_files[1].toml_path,
+            test_path!("songs", "zeropadded", "music.tm2.toml"),
+            "zeropadded should come second (alphabetical sorting)"
+        );
+        assert_matches!(
+            group_files[1],
+            Group {
+                parsed: parsed::GroupFile::Album { files: actual, .. },
+                ..
+            } if actual == &vec![
+                (
+                    test_path!("songs", "zeropadded", "01-The Biggest Fish.wav"),
+                    parsed::AlbumFileMeta {
+                        title: s!("01-The Biggest Fish"),
+                        artists: vec![],
+                        genres: vec![],
+                        album: None,
+                        album_artists: vec![],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: 1
+                    }
+                ),
+                (
+                    test_path!("songs", "zeropadded", "02-The Next Biggest Fish.wav"),
+                    parsed::AlbumFileMeta {
+                        title: s!("02-The Next Biggest Fish"),
+                        artists: vec![],
+                        genres: vec![],
+                        album: None,
+                        album_artists: vec![],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: 2,
+                    }
+                ),
+                (
+                    test_path!("songs", "zeropadded", "11-Fish to the Twenty-First Order.wav"),
+                    parsed::AlbumFileMeta {
+                        title: s!("11-Fish to the Twenty-First Order"),
+                        artists: vec![],
+                        genres: vec![],
+                        album: None,
+                        album_artists: vec![],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: 3,
+                    }
+                ),
+            ],
+            "output tracks for zeropadded should match",
         );
     }
 

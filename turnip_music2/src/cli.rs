@@ -8,6 +8,7 @@ use crate::{
     fs::{Fs, FsPathBuf},
     scanner::{Group, scan_dir, scan_library},
     toml::TomlItemExt,
+    util::TitleSortKey,
     warning::{Warning, WarningSender},
 };
 use anyhow::anyhow;
@@ -230,10 +231,10 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
 
             let group_file = match mode {
                 ImportMode::Album => {
-                    // Sort by disc_idx, track_idx, and otherwise by the pathname
-                    // TODO this clone is sad :((
-                    relevant_songs
-                        .sort_by_key(|(title, meta)| (meta.disc, meta.track, title.clone()));
+                    // Sort by disc_idx, track_idx, and otherwise by a parsed form of the title
+                    relevant_songs.sort_by_cached_key(|(title, meta)| {
+                        (meta.disc, meta.track, TitleSortKey::parse_from(title))
+                    });
 
                     // Get globals
 
