@@ -233,7 +233,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                     // Sort by disc_idx, track_idx, and otherwise by the pathname
                     // TODO this clone is sad :((
                     relevant_songs
-                        .sort_by_key(|(name, meta)| (meta.disc, meta.track, name.clone()));
+                        .sort_by_key(|(title, meta)| (meta.disc, meta.track, title.clone()));
 
                     // Get globals
                     let global = user_defined::AlbumGlobalMeta {
@@ -269,9 +269,9 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                     // Pull out metadata, defaulting the track names to the filenames but otherwise keeping things normal
                     let files = relevant_songs
                         .into_iter()
-                        .map(|(name, meta)| {
+                        .map(|(title, meta)| {
                             let meta = user_defined::AlbumFileMeta {
-                                name: meta.name.unwrap_or_else(|| name.clone()),
+                                title: meta.title.unwrap_or_else(|| title.clone()),
                                 artists: userify_vec_if_not_global(&global.artists, meta.artists),
                                 genres: userify_vec_if_not_global(&global.genres, meta.genres),
                                 album: userify_opt_if_not_global(&global.album, meta.album),
@@ -290,7 +290,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                                 ),
                                 track: meta.track,
                             };
-                            (name, meta)
+                            (title, meta)
                         })
                         .collect::<IndexMap<String, _>>();
 
@@ -307,16 +307,16 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                     // Don't sort
 
                     // Get the compilation name
-                    let name = self.fs.path_trailing(path.as_ref()).ok_or_else(|| {
+                    let title = self.fs.path_trailing(path.as_ref()).ok_or_else(|| {
                         anyhow!(
-                            "Compilation directory '{:?}' has no trailing path and thus no name",
+                            "Compilation directory '{:?}' has no trailing path and thus no title",
                             path
                         )
                     })?;
-                    let name = name.to_str().ok_or_else(|| {
-                        anyhow!("Compilation directory '{:?}' was not valid Unicode", name)
+                    let title = title.to_str().ok_or_else(|| {
+                        anyhow!("Compilation directory '{:?}' was not valid Unicode", title)
                     })?;
-                    let title = name.to_string();
+                    let title = title.to_string();
 
                     // Get globals
                     let global = user_defined::CompilationGlobalMeta {
@@ -341,9 +341,9 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                     // Pull out metadata, defaulting the track names to the filenames but otherwise keeping things normal
                     let files = relevant_songs
                         .into_iter()
-                        .map(|(name, meta)| {
+                        .map(|(title, meta)| {
                             let meta = user_defined::CompilationFileMeta {
-                                name: meta.name.unwrap_or_else(|| name.clone()),
+                                title: meta.title.unwrap_or_else(|| title.clone()),
                                 artists: userify_vec_if_not_global(&global.artists, meta.artists),
                                 genres: userify_vec_if_not_global(&global.genres, meta.genres),
                                 album: userify_opt_if_not_global(&global.album, meta.album),
@@ -363,7 +363,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                                 track: meta.track,
                                 sort_by_idx: None,
                             };
-                            (name, meta)
+                            (title, meta)
                         })
                         .collect::<IndexMap<String, _>>();
 

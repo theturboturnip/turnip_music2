@@ -24,8 +24,8 @@
 //!           are respectively kept constant and incremented from the previous Song in an alphanumeric sorting by file name within the Group,
 //!           starting at (1,1).
 //! - Creating a 1:1 mapping of Songs -> output Songs
-//!     - if within an Album Group, `<First Artist of Album>/<Album Name>/<Song Name>`
-//!     - if within a Compilation Group, `<First Artist of Song>/<Song Name>`
+//!     - if within an Album Group, `<First Artist of Album>/<Album Title>/<Song Title>`
+//!     - if within a Compilation Group, `<First Artist of Song>/<Song Title>`
 //!     - all path components are deduplicated if necessary with uppercase alpha "ABCDE..." postfixes.
 //!     - if any path component contains special characters the output process stops (UTF-8 allowed, but not filesystem-breakers such as NTFS `/\:*"?<>|`)
 //!     - TODO: the output restrictions and FFMPEG configs should be encoded as separate TOML files or in the library config TOML

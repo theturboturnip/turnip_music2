@@ -179,15 +179,15 @@ artists = ["UVERworld"]
 album = "ODD FUTURE"
 
 [files."track01.flac"]
-name = "ODD FUTURE"
+title = "ODD FUTURE"
 track = 1
 
 [files."track02.flac"]
-name = "PLOT"
+title = "PLOT"
 track = 2
 
 [files."track03.flac"]
-name = "CORE STREAM"
+title = "CORE STREAM"
 track = 3
 "#,
             "Oddfuture config should be correct"
@@ -204,19 +204,19 @@ artists = ["BUMP OF CHICKEN"]
 album = "SOUVENIR"
 
 [files."track01.flac"]
-name = "SOUVENIR"
+title = "SOUVENIR"
 track = 1
 
 [files."track02.flac"]
-name = "クロノスタシス"
+title = "クロノスタシス"
 track = 2
 
 [files."track03.flac"]
-name = "窓の中から"
+title = "窓の中から"
 track = 3
 
 [files."track04.flac"]
-name = "Track 4"
+title = "Track 4"
 track = 4
 "#,
             "Souvenir config should be correct"
@@ -250,7 +250,7 @@ track = 4
                 (
                     test_path!("songs", "oddfuture", "track01.flac"),
                     parsed::AlbumFileMeta {
-                        name: s!("ODD FUTURE"),
+                        title: s!("ODD FUTURE"),
                         artists: vec![s!("UVERworld")],
                         genres: vec![],
                         album: Some(s!("ODD FUTURE")),
@@ -264,7 +264,7 @@ track = 4
                 (
                     test_path!("songs", "oddfuture", "track02.flac"),
                     parsed::AlbumFileMeta {
-                        name: s!("PLOT"),
+                        title: s!("PLOT"),
                         artists: vec![s!("UVERworld")],
                         genres: vec![],
                         album: Some(s!("ODD FUTURE")),
@@ -278,7 +278,7 @@ track = 4
                 (
                     test_path!("songs", "oddfuture", "track03.flac"),
                     parsed::AlbumFileMeta {
-                        name: s!("CORE STREAM"),
+                        title: s!("CORE STREAM"),
                         artists: vec![s!("UVERworld")],
                         genres: vec![],
                         album: Some(s!("ODD FUTURE")),
@@ -306,7 +306,7 @@ track = 4
                 (
                     test_path!("songs", "souvenir", "track01.flac"),
                     parsed::AlbumFileMeta {
-                        name: s!("SOUVENIR"),
+                        title: s!("SOUVENIR"),
                         artists: vec![s!("BUMP OF CHICKEN")],
                         genres: vec![],
                         album: Some(s!("SOUVENIR")),
@@ -320,7 +320,7 @@ track = 4
                 (
                     test_path!("songs", "souvenir", "track02.flac"),
                     parsed::AlbumFileMeta {
-                        name: s!("クロノスタシス"),
+                        title: s!("クロノスタシス"),
                         artists: vec![s!("BUMP OF CHICKEN")],
                         genres: vec![],
                         album: Some(s!("SOUVENIR")),
@@ -334,7 +334,7 @@ track = 4
                 (
                     test_path!("songs", "souvenir", "track03.flac"),
                     parsed::AlbumFileMeta {
-                        name: s!("窓の中から"),
+                        title: s!("窓の中から"),
                         artists: vec![s!("BUMP OF CHICKEN")],
                         genres: vec![],
                         album: Some(s!("SOUVENIR")),
@@ -348,7 +348,7 @@ track = 4
                 (
                     test_path!("songs", "souvenir", "track04.flac"),
                     parsed::AlbumFileMeta {
-                        name: s!("Track 4"),
+                        title: s!("Track 4"),
                         artists: vec![s!("BUMP OF CHICKEN")],
                         genres: vec![],
                         album: Some(s!("SOUVENIR")),
@@ -393,7 +393,7 @@ fn cdrip_oddfuture() -> TestFs {
             TestFs::MusicFile(
                 NativeMetadata {
                     fmt: NativeMetadataFormat::FLAC,
-                    name: Some(s!("ODD FUTURE")),
+                    title: Some(s!("ODD FUTURE")),
                     album: Some(s!("ODD FUTURE")),
                     album_artists: vec![],
                     artists: vec![s!("UVERworld")],
@@ -411,7 +411,7 @@ fn cdrip_oddfuture() -> TestFs {
             TestFs::MusicFile(
                 NativeMetadata {
                     fmt: NativeMetadataFormat::FLAC,
-                    name: Some(s!("PLOT")),
+                    title: Some(s!("PLOT")),
                     album: Some(s!("ODD FUTURE")),
                     album_artists: vec![],
                     artists: vec![s!("UVERworld")],
@@ -429,7 +429,7 @@ fn cdrip_oddfuture() -> TestFs {
             TestFs::MusicFile(
                 NativeMetadata {
                     fmt: NativeMetadataFormat::FLAC,
-                    name: Some(s!("CORE STREAM")),
+                    title: Some(s!("CORE STREAM")),
                     album: Some(s!("ODD FUTURE")),
                     album_artists: vec![],
                     artists: vec![s!("UVERworld")],
@@ -453,7 +453,7 @@ fn cdrip_souvenir() -> TestFs {
             TestFs::MusicFile(
                 NativeMetadata {
                     fmt: NativeMetadataFormat::FLAC,
-                    name: Some(s!("SOUVENIR")),
+                    title: Some(s!("SOUVENIR")),
                     album: Some(s!("SOUVENIR")),
                     album_artists: vec![],
                     artists: vec![s!("BUMP OF CHICKEN")],
@@ -471,7 +471,7 @@ fn cdrip_souvenir() -> TestFs {
             TestFs::MusicFile(
                 NativeMetadata {
                     fmt: NativeMetadataFormat::FLAC,
-                    name: Some(s!("クロノスタシス")),
+                    title: Some(s!("クロノスタシス")),
                     album: Some(s!("SOUVENIR")),
                     album_artists: vec![],
                     artists: vec![s!("BUMP OF CHICKEN")],
@@ -489,7 +489,7 @@ fn cdrip_souvenir() -> TestFs {
             TestFs::MusicFile(
                 NativeMetadata {
                     fmt: NativeMetadataFormat::FLAC,
-                    name: Some(s!("窓の中から")),
+                    title: Some(s!("窓の中から")),
                     album: Some(s!("SOUVENIR")),
                     album_artists: vec![],
                     artists: vec![s!("BUMP OF CHICKEN")],
@@ -507,7 +507,7 @@ fn cdrip_souvenir() -> TestFs {
             TestFs::MusicFile(
                 NativeMetadata {
                     fmt: NativeMetadataFormat::FLAC,
-                    name: Some(s!("Track 4")),
+                    title: Some(s!("Track 4")),
                     album: Some(s!("SOUVENIR")),
                     album_artists: vec![],
                     artists: vec![s!("BUMP OF CHICKEN")],
@@ -532,7 +532,7 @@ fn deltarune_partial() -> TestFs {
             TestFs::MusicFile(
                 NativeMetadata {
                     fmt: NativeMetadataFormat::FLAC,
-                    name: Some(s!("Don't Forget")),
+                    title: Some(s!("Don't Forget")),
                     album: Some(s!("DELTARUNE Chapter 1 OST")),
                     album_artists: vec![s!("Toby Fox")],
                     artists: vec![s!("Laura Shigihara")],
@@ -550,7 +550,7 @@ fn deltarune_partial() -> TestFs {
             TestFs::MusicFile(
                 NativeMetadata {
                     fmt: NativeMetadataFormat::FLAC,
-                    name: Some(s!("ANOTHER HIM")),
+                    title: Some(s!("ANOTHER HIM")),
                     album: Some(s!("DELTARUNE Chapter 1 OST")),
                     album_artists: vec![s!("Toby Fox")],
                     artists: vec![s!("Toby Fox")],
@@ -568,7 +568,7 @@ fn deltarune_partial() -> TestFs {
             TestFs::MusicFile(
                 NativeMetadata {
                     fmt: NativeMetadataFormat::FLAC,
-                    name: Some(s!("Beginning")),
+                    title: Some(s!("Beginning")),
                     album: Some(s!("DELTARUNE Chapter 1 OST")),
                     album_artists: vec![s!("Toby Fox")],
                     artists: vec![s!("Toby Fox")],

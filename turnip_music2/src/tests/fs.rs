@@ -280,7 +280,7 @@ album="Example Album"
 album_artists=["Mr Example", "Ms Example"]
 
 [files."song1.mp3"]
-name="song1"
+title="song1"
 "#
                         .to_string()
                     )
@@ -290,7 +290,7 @@ name="song1"
                     TestFs::MusicFile(
                         NativeMetadata {
                             fmt: NativeMetadataFormat::ID3,
-                            name: Some(s!("song1-mp3meta")),
+                            title: Some(s!("song1-mp3meta")),
                             album: None,
                             album_artists: vec![],
                             artists: vec![],
@@ -394,7 +394,7 @@ fn test_group_file() {
             },
             files: indexmap::indexmap! {
                 s!("song1.mp3") => user_defined::AlbumFileMeta {
-                    name: s!("song1"),
+                    title: s!("song1"),
                     ..Default::default()
                 }
             },
@@ -413,7 +413,7 @@ fn test_song_metadata() {
         file,
         Ok(NativeMetadata {
             fmt: NativeMetadataFormat::ID3,
-            name: Some("song1-mp3meta".to_owned()),
+            title: Some("song1-mp3meta".to_owned()),
             album: None,
             album_artists: vec![],
             artists: vec![],

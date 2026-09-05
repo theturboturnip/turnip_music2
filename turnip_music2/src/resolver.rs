@@ -4,6 +4,6 @@ use crate::data_model::MbId;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum OutputGroupKey {
     AlbumByMusicBrainz(MbId),
-    AlbumByName(String),
-    CompilationByName(String),
+    AlbumByTitle(String),
+    CompilationByTitle(String),
 }

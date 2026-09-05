@@ -20,7 +20,7 @@ pub const NATIVE_MUSIC_EXTS: [&'static str; 6] = [
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NativeMetadata {
     pub fmt: NativeMetadataFormat,
-    pub name: Option<String>,
+    pub title: Option<String>,
     pub album: Option<String>,
     pub album_artists: Vec<String>,
     pub artists: Vec<String>,
@@ -35,7 +35,7 @@ impl Default for NativeMetadata {
     fn default() -> Self {
         Self {
             fmt: NativeMetadataFormat::None,
-            name: Default::default(),
+            title: Default::default(),
             album: Default::default(),
             album_artists: Default::default(),
             artists: Default::default(),
@@ -74,7 +74,7 @@ impl NativeMetadataFormat {
                 let tag = id3::Tag::read_from_path(&path)?;
                 Ok(NativeMetadata {
                     fmt,
-                    name: tag.title().map(str::to_string),
+                    title: tag.title().map(str::to_string),
                     album: tag.album().map(str::to_string),
                     album_artists: match tag.album_artist() {
                         Some(s) => vec![s.to_string()],
@@ -109,7 +109,7 @@ impl NativeMetadataFormat {
                 )?;
                 Ok(NativeMetadata {
                     fmt,
-                    name: tag.take_title(),
+                    title: tag.take_title(),
                     // TODO take_title_sort_order
                     album: tag.take_album(),
                     // TODO take_album_sort_order
@@ -134,7 +134,7 @@ impl NativeMetadataFormat {
                 // Artist           ATLUS
                 // Album            PERSONA4 DANCING ALL NIGHT Original Soundtrack Disc3
                 // TrackNumber      1/17
-                let name = tag
+                let title = tag
                     .get_vorbis("title")
                     .map(|iter| iter.last().map(str::to_owned))
                     .flatten();
@@ -182,7 +182,7 @@ impl NativeMetadataFormat {
 
                 Ok(NativeMetadata {
                     fmt,
-                    name,
+                    title,
                     album,
                     album_artists: vec![],
                     artists: artist.into_iter().collect(),

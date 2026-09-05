@@ -56,12 +56,6 @@ pub struct ExportParams {
     // pub album_art: AlbumArtMode,
 }
 
-// #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-// pub struct ConfigArtistNameOverride {
-//     pub artist_id: MbId,
-//     pub artist_name: String,
-// }
-
 /// A set of concrete sources for metadata, controlled by the user, that are never discarded.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct Origin {
@@ -78,27 +72,17 @@ pub struct Origin {
     pub cddb_discid: Option<CddbDiscId>,
 }
 
-// /// A filter for the files to actually scan and use ---
-// /// in case of icky input directories with different copies of the same music
-// #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-// pub struct ScanFilter {
-//     /// e.g. \['mp3', 'flac'\]
-//     pub ext_filters: Vec<String>,
-// }
-
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(tag = "type")]
 pub enum GroupFile {
     Compilation {
         origin: Origin,
-        // scan_filter: Option<ScanFilter>,
         title: String, // TODO use a tag system or something
         global: CompilationGlobalMeta,
         files: IndexMap<String, CompilationFileMeta>,
     },
     Album {
         origin: Origin,
-        // scan_filter: Option<ScanFilter>,
         album_art: Option<String>,
         global: AlbumGlobalMeta,
         files: IndexMap<String, AlbumFileMeta>,
@@ -112,20 +96,13 @@ impl GroupFile {
         let file = toml_edit::de::from_document(document.clone())?;
         Ok((document, file))
     }
-
-    // pub fn scan_filter(&self) -> Option<&ScanFilter> {
-    //     match self {
-    //         GroupFile::Compilation { scan_filter, .. } => scan_filter.as_ref(),
-    //         GroupFile::Album { scan_filter, .. } => scan_filter.as_ref(),
-    //     }
-    // }
 }
 
 /// TODO probably shouldn't be Default but it's useful for e.g. testing
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct CompilationFileMeta {
     /// Likely to be set
-    pub name: String,
+    pub title: String,
     pub artists: Option<Vec<String>>,
     pub genres: Option<Vec<String>>,
 
@@ -144,7 +121,7 @@ pub struct CompilationFileMeta {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct CompilationGlobalMeta {
     // Can't be set globally
-    // pub name: Option<String>,
+    // pub title: Option<String>,
     // pub track: Option<u64>,
     // /// Compilation-specific
     // pub idx: Option<u64>,
@@ -168,7 +145,7 @@ pub struct AlbumFileMeta {
     // TODO replace with generic ID
     // pub mbid: Option<MbId>,
     /// Likely to be set
-    pub name: String,
+    pub title: String,
     pub artists: Option<Vec<String>>,
     pub genres: Option<Vec<String>>,
 
@@ -184,7 +161,7 @@ pub struct AlbumFileMeta {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct AlbumGlobalMeta {
     // Can't be set globally
-    // pub name: Option<String>,
+    // pub title: Option<String>,
     // pub track: Option<u64>,
     // TODO replace with generic ID
     // pub mbid: Option<MbId>,

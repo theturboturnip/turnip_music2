@@ -112,7 +112,7 @@ pub struct AlbumFileMeta {
     // TODO replace with generic ID
     // pub mbid: Option<MbId>,
     /// Likely to be set
-    pub name: String,
+    pub title: String,
     pub artists: Vec<String>,
     pub genres: Vec<String>,
 
@@ -158,7 +158,7 @@ impl AlbumFileMeta {
 
         Self {
             // Always individually set
-            name: f.name,
+            title: f.title,
 
             // Set by interaction with auto-incrementer
             track: meta_track,
@@ -186,7 +186,7 @@ impl AlbumFileMeta {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompilationFileMeta {
     /// Likely to be set
-    pub name: String,
+    pub title: String,
     pub artists: Vec<String>,
     pub genres: Vec<String>,
 
@@ -207,7 +207,7 @@ impl CompilationFileMeta {
         (
             Self {
                 // Always individually set
-                name: f.name,
+                title: f.title,
                 track: f.track,
 
                 artists: f
