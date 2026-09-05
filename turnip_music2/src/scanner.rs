@@ -6,9 +6,9 @@ use std::ffi::{OsStr, OsString};
 
 #[derive(Debug, Clone)]
 pub struct Group<F: Fs> {
-    path: F::PathBuf,
-    doc: toml_edit::DocumentMut,
-    parsed: parsed::GroupFile<F>,
+    pub toml_path: F::PathBuf,
+    pub doc: toml_edit::DocumentMut,
+    pub parsed: parsed::GroupFile<F>,
 }
 
 pub struct ScannedDir<F: Fs> {
@@ -85,10 +85,14 @@ pub fn scan_library<F: Fs, W: WarningSender<F::PathBuf>>(
     // TODO par_iter here?
     Ok(groups
         .into_iter()
-        .map(|(path, group_doc, group_struct)| Group {
+        .map(|(toml_path, group_doc, group_struct)| Group {
             doc: group_doc,
-            parsed: parsed::GroupFile::from_user(fs, path.as_ref(), group_struct),
-            path,
+            parsed: parsed::GroupFile::from_user(
+                fs,
+                fs.path_parent_dir(toml_path.as_ref()).unwrap().as_ref(),
+                group_struct,
+            ),
+            toml_path,
         })
         .collect::<Vec<_>>())
 }

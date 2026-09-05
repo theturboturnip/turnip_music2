@@ -10,15 +10,17 @@ macro_rules! test_dir {
 }
 macro_rules! assert_matches {
     ( $actual:expr, $expected:pat, $($msg:tt)* ) => {{
-        let actual = $actual;
+        let actual = &$actual;
         if !matches!(actual, $expected) {
             panic!("{actual:?} didn't meet condition: {}", format!($($msg)*));
         }
     }};
     ( $actual:expr, $expected:pat_param if $e:expr, $($msg:tt)* ) => {{
-        let actual = $actual;
-        if let $expected = actual && ($e) {
-
+        let actual = &$actual;
+        if let $expected = actual {
+            if !$e {
+                panic!("{actual:?} didn't meet condition: {}", format!($($msg)*));
+            }
         } else {
             panic!("{actual:?} didn't meet condition: {}", format!($($msg)*));
         }
@@ -34,7 +36,6 @@ mod init {
     use super::*;
     use crate::{
         cli::{CliContext, Library},
-        tests::cli::basic_unpadded_tracks,
         warning::Warning,
     };
 
@@ -131,6 +132,242 @@ search_paths = ["songs"]
     }
 }
 
+mod import {
+    use super::*;
+    use crate::{
+        cli::{CliContext, Library},
+        data_model::{parsed, user_defined},
+        scanner::Group,
+        warning::Warning,
+    };
+
+    #[test]
+    fn test_import_happy_cd_rips_as_albums() {
+        let mut fs = basic_test_hierarchy(
+            test_dir!(
+                ("oddfuture", cdrip_oddfuture()), //
+                ("souvenir", cdrip_souvenir()),   //
+            ),
+            true,
+        );
+        let mut warner = vec![];
+
+        let library = || -> anyhow::Result<Option<Library<_>>> {
+            let mut ctx = CliContext::new(None, &mut fs, &mut warner);
+            ctx.import(
+                // Add souvenir first, to check that the groups are sorted afterwards
+                &vec![s!("songs/souvenir"), s!("songs/oddfuture")],
+                None,
+                true,
+                crate::cli::ImportMode::Album,
+            )?;
+            ctx.reload_library()?;
+            Ok(ctx.loaded_library)
+        }();
+
+        assert_eq!(warner, vec![]);
+
+        assert_matches!(
+            fs.traverse(test_path!("songs", "oddfuture", "music.tm2.toml")),
+            Ok(TestFs::TextFile(t)) if t ==
+r#"type = "Album"
+
+[origin]
+
+[global]
+artists = ["UVERworld"]
+album = "ODD FUTURE"
+
+[files."track01.flac"]
+name = "ODD FUTURE"
+track = 1
+
+[files."track02.flac"]
+name = "PLOT"
+track = 2
+
+[files."track03.flac"]
+name = "CORE STREAM"
+track = 3
+"#,
+            "Oddfuture config should be correct"
+        );
+        assert_matches!(
+            fs.traverse(test_path!("songs", "souvenir", "music.tm2.toml")),
+            Ok(TestFs::TextFile(t)) if t ==
+r#"type = "Album"
+
+[origin]
+
+[global]
+artists = ["BUMP OF CHICKEN"]
+album = "SOUVENIR"
+
+[files."track01.flac"]
+name = "SOUVENIR"
+track = 1
+
+[files."track02.flac"]
+name = "クロノスタシス"
+track = 2
+
+[files."track03.flac"]
+name = "窓の中から"
+track = 3
+
+[files."track04.flac"]
+name = "Track 4"
+track = 4
+"#,
+            "Souvenir config should be correct"
+        );
+
+        assert_matches!(
+            library,
+            Ok(Some(Library {
+                config_file,
+                group_files
+            })),
+            "library must have been made successfully"
+        );
+        let group_files = library.unwrap().unwrap().group_files;
+        assert_eq!(
+            group_files.len(),
+            2,
+            "should have found oddfuture and souvenir"
+        );
+        assert_eq!(
+            group_files[0].toml_path,
+            test_path!("songs", "oddfuture", "music.tm2.toml"),
+            "oddfuture should come first (alphabetical sorting)"
+        );
+        assert_matches!(
+            group_files[0],
+            Group {
+                parsed: parsed::GroupFile::Album { files: actual, .. },
+                ..
+            } if actual == &vec![
+                (
+                    test_path!("songs", "oddfuture", "track01.flac"),
+                    parsed::AlbumFileMeta {
+                        name: s!("ODD FUTURE"),
+                        artists: vec![s!("UVERworld")],
+                        genres: vec![],
+                        album: Some(s!("ODD FUTURE")),
+                        album_artists: vec![],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: 1
+                    }
+                ),
+                (
+                    test_path!("songs", "oddfuture", "track02.flac"),
+                    parsed::AlbumFileMeta {
+                        name: s!("PLOT"),
+                        artists: vec![s!("UVERworld")],
+                        genres: vec![],
+                        album: Some(s!("ODD FUTURE")),
+                        album_artists: vec![],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: 2,
+                    }
+                ),
+                (
+                    test_path!("songs", "oddfuture", "track03.flac"),
+                    parsed::AlbumFileMeta {
+                        name: s!("CORE STREAM"),
+                        artists: vec![s!("UVERworld")],
+                        genres: vec![],
+                        album: Some(s!("ODD FUTURE")),
+                        album_artists: vec![],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: 3,
+                    }
+                ),
+            ],
+            "output tracks for odd future should match",
+        );
+        assert_eq!(
+            group_files[1].toml_path,
+            test_path!("songs", "souvenir", "music.tm2.toml"),
+            "souvenir should come second (alphabetical sorting)"
+        );
+        assert_matches!(
+            group_files[1],
+            Group {
+                parsed: parsed::GroupFile::Album { files: actual, .. },
+                ..
+            } if actual == &vec![
+                (
+                    test_path!("songs", "souvenir", "track01.flac"),
+                    parsed::AlbumFileMeta {
+                        name: s!("SOUVENIR"),
+                        artists: vec![s!("BUMP OF CHICKEN")],
+                        genres: vec![],
+                        album: Some(s!("SOUVENIR")),
+                        album_artists: vec![],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: 1
+                    }
+                ),
+                (
+                    test_path!("songs", "souvenir", "track02.flac"),
+                    parsed::AlbumFileMeta {
+                        name: s!("クロノスタシス"),
+                        artists: vec![s!("BUMP OF CHICKEN")],
+                        genres: vec![],
+                        album: Some(s!("SOUVENIR")),
+                        album_artists: vec![],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: 2,
+                    }
+                ),
+                (
+                    test_path!("songs", "souvenir", "track03.flac"),
+                    parsed::AlbumFileMeta {
+                        name: s!("窓の中から"),
+                        artists: vec![s!("BUMP OF CHICKEN")],
+                        genres: vec![],
+                        album: Some(s!("SOUVENIR")),
+                        album_artists: vec![],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: 3,
+                    }
+                ),
+                (
+                    test_path!("songs", "souvenir", "track04.flac"),
+                    parsed::AlbumFileMeta {
+                        name: s!("Track 4"),
+                        artists: vec![s!("BUMP OF CHICKEN")],
+                        genres: vec![],
+                        album: Some(s!("SOUVENIR")),
+                        album_artists: vec![],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: 4,
+                    }
+                ),
+            ],
+            "output tracks for souvenir should match",
+        );
+    }
+
+    // TODO TEST FOR FOLDER WITH MULTIPLE FILE TYPES, WHERE WE ONLY WANT ONE
+    // TODO TEST COMPILATION IMPORTS
+}
+
 fn basic_test_hierarchy(songs: TestFs, with_library: bool) -> TestFs {
     if with_library {
         test_dir!(
@@ -181,7 +418,7 @@ fn cdrip_oddfuture() -> TestFs {
                     num_discs: None,
                     disc: None,
                     num_tracks: None,
-                    track: Some(1),
+                    track: Some(2),
                     genres: vec![]
                 },
                 None
@@ -199,7 +436,7 @@ fn cdrip_oddfuture() -> TestFs {
                     num_discs: None,
                     disc: None,
                     num_tracks: None,
-                    track: Some(1),
+                    track: Some(3),
                     genres: vec![]
                 },
                 None

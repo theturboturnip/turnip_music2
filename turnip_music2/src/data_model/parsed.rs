@@ -3,7 +3,7 @@ use crate::{
     fs::{Fs, FsPathBuf},
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GroupFile<F: Fs> {
     Compilation {
         origin: user_defined::Origin,

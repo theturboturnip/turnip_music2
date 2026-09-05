@@ -40,27 +40,47 @@ impl TestFs {
         &'s self,
         path: P,
     ) -> anyhow::Result<&'s TestFs> {
+        let constant_path_stack = path.as_ref();
+        {
+            let mut i = 0;
+            let mut curr_fs = self;
+            'walk: while i <= constant_path_stack.len() {
+                let curr_path = &constant_path_stack[..i];
+                let rem_path = &constant_path_stack[i..];
+                match (curr_fs, &rem_path) {
+                    (entry, &[]) => return Ok(entry),
+                    // local paths (".." not supported)
+                    (TestFs::Dir(entries), &[next_comp, ..]) if next_comp == "." => {
+                        i += 1;
+                        continue;
+                    }
+                    // TODO '..' support here should now work
+                    (TestFs::Dir(entries), &[next_comp, ..]) => {
+                        // Recurse on the next element
+                        for (subpath, entry) in entries.iter() {
+                            if subpath == next_comp {
+                                i += 1;
+                                curr_fs = entry;
+                                continue 'walk;
+                            }
+                        }
+                        bail!(
+                            "Path lookup {constant_path_stack:?}: At directory {curr_path:?} {i}, tried to find {next_comp:?} but it didn't exist"
+                        )
+                    }
+                    (_, &[next_comp, ..]) => {
+                        bail!(
+                            "Path lookup {constant_path_stack:?}: At {curr_path:?} {i} that isn't a directory, tried to traverse into file {next_comp:?} that wasn't a directory"
+                        )
+                    }
+                    (_, &[]) => unreachable!(),
+                }
+            }
+            bail!("Mystery error");
+        }
+
         // TODO absolute path support
         let path = path.as_ref();
-        match (self, &path) {
-            (entry, &[]) => Ok(entry),
-            // local paths (".." not supported)
-            (TestFs::Dir(entries), &[next_comp, ..]) if next_comp == "." => {
-                self.traverse(&path[1..])
-            }
-            (TestFs::Dir(entries), &[next_comp, ..]) => {
-                // Recurse on the next element
-                for (subpath, entry) in entries.iter() {
-                    if subpath == next_comp {
-                        return entry.traverse(&path[1..]);
-                    }
-                }
-                bail!("No such entry {next_comp} in directory")
-            }
-            (_, &[next_comp, ..]) => {
-                bail!("tried to traverse into {next_comp}, which is not a directory")
-            }
-        }
     }
 
     pub fn overwrite<'s, P: AsRef<<Self as Fs>::Path>>(

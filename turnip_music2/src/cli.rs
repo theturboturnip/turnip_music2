@@ -96,9 +96,10 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                     groups.extend(scan_library(
                         self.fs,
                         self.warner,
-                        self.config_path.clone().joined(s.as_ref()),
+                        self.library_dir.clone().joined(s.as_ref()),
                     )?);
                 }
+                groups.sort_by_cached_key(|g| g.toml_path.clone());
                 l.group_files = groups;
             }
             None => anyhow::bail!("No library loaded"),
@@ -181,7 +182,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                         false
                     }
                 } else {
-                    false
+                    true
                 };
 
                 if !should_import {
@@ -218,6 +219,12 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
             fn userify_opt_if_not_global<T>(g: &Option<T>, u: Option<T>) -> Option<T> {
                 if g.is_some() { None } else { u }
             }
+            fn pull_empty_to_none<T>(v: Option<Vec<T>>) -> Option<Vec<T>> {
+                match v {
+                    Some(v) if v.is_empty() => None,
+                    _ => v,
+                }
+            }
 
             let origin = user_defined::Origin::default();
 
@@ -230,10 +237,18 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
 
                     // Get globals
                     let global = user_defined::AlbumGlobalMeta {
-                        artists: where_all_equal(&relevant_songs, |(_, m)| &m.artists),
-                        genres: where_all_equal(&relevant_songs, |(_, m)| &m.genres),
+                        // For lists, if they are all the same and they are all empty list then treat them as None instead of Some(vec![])
+                        artists: pull_empty_to_none(where_all_equal(&relevant_songs, |(_, m)| {
+                            &m.artists
+                        })),
+                        genres: pull_empty_to_none(where_all_equal(&relevant_songs, |(_, m)| {
+                            &m.genres
+                        })),
                         album: where_all_equal(&relevant_songs, |(_, m)| &m.album).flatten(),
-                        album_artists: where_all_equal(&relevant_songs, |(_, m)| &m.album_artists),
+                        album_artists: pull_empty_to_none(where_all_equal(
+                            &relevant_songs,
+                            |(_, m)| &m.album_artists,
+                        )),
                         num_discs: where_all_equal(&relevant_songs, |(_, m)| &m.num_discs)
                             .flatten(),
                         disc: where_all_equal(&relevant_songs, |(_, m)| &m.disc).flatten(),
@@ -271,7 +286,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                                 disc: userify_opt_if_not_global(&global.disc, meta.disc),
                                 num_tracks: userify_opt_if_not_global(
                                     &global.num_tracks,
-                                    meta.track,
+                                    meta.num_tracks,
                                 ),
                                 track: meta.track,
                             };
@@ -343,7 +358,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                                 disc: userify_opt_if_not_global(&global.disc, meta.disc),
                                 num_tracks: userify_opt_if_not_global(
                                     &global.num_tracks,
-                                    meta.track,
+                                    meta.num_tracks,
                                 ),
                                 track: meta.track,
                                 sort_by_idx: None,
@@ -362,9 +377,23 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                     }
                 }
             };
-            let doc = toml_edit::ser::to_document(&group_file)?;
-            self.fs.write_toml_file(path, doc)?
+            let mut doc = toml_edit::ser::to_document(&group_file)?;
+            // Correct formatting - toml_edit LOVES inline tables
+            doc.get_mut("origin").unwrap().make_table_regular();
+            doc.get_mut("global").unwrap().make_table_regular();
+            // files table
+            let files = doc.get_mut("files").unwrap();
+            files.make_table_regular();
+            files.as_table_mut().unwrap().set_implicit(true);
+            for f in files.as_table_mut().unwrap().iter_mut() {
+                f.1.make_table_regular();
+            }
+
+            self.fs
+                .write_toml_file(path.joined(user_defined::GroupFile::TOML_FILE_NAME), doc)?
         }
+
+        // TODO rescan
 
         Ok(())
     }
