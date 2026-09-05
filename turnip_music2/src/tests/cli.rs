@@ -136,9 +136,8 @@ mod import {
     use super::*;
     use crate::{
         cli::{CliContext, Library},
-        data_model::{parsed, user_defined},
+        data_model::parsed,
         scanner::Group,
-        warning::Warning,
     };
 
     /// Test the imports of albums with well-behaved metadata produce usable TOML.
@@ -220,10 +219,7 @@ title = "Track 4"
 
         assert_matches!(
             library,
-            Ok(Some(Library {
-                config_file,
-                group_files
-            })),
+            Ok(Some(Library { .. })),
             "library must have been made successfully"
         );
         let group_files = library.unwrap().unwrap().group_files;
@@ -433,10 +429,7 @@ title = "11-Fish to the Twenty-First Order"
 
         assert_matches!(
             library,
-            Ok(Some(Library {
-                config_file,
-                group_files
-            })),
+            Ok(Some(Library { .. })),
             "library must have been made successfully"
         );
         let group_files = library.unwrap().unwrap().group_files;
@@ -554,10 +547,6 @@ title = "11-Fish to the Twenty-First Order"
             "output tracks for zeropadded should match",
         );
     }
-
-    // TODO TEST FOR FOLDER WITH MULTIPLE FILE TYPES, WHERE WE ONLY WANT ONE
-    // TODO TEST COMPILATION IMPORTS
-
     /// Test that imports of sparse albums work correctly, ordering by native metadata track number, and eliding track numbers ONLY when necessary
     #[test]
     fn test_album_with_sparse_native_track_numbers() {
@@ -612,10 +601,7 @@ track = 39
 
         assert_matches!(
             library,
-            Ok(Some(Library {
-                config_file,
-                group_files
-            })),
+            Ok(Some(Library { .. })),
             "library must have been made successfully"
         );
         let group_files = library.unwrap().unwrap().group_files;
@@ -725,10 +711,7 @@ title = "Toby Fox - DELTARUNE Chapter 1 OST - 02 Beginning"
 
         assert_matches!(
             library,
-            Ok(Some(Library {
-                config_file,
-                group_files
-            })),
+            Ok(Some(Library { .. })),
             "library must have been made successfully"
         );
         let group_files = library.unwrap().unwrap().group_files;
@@ -790,6 +773,9 @@ title = "Toby Fox - DELTARUNE Chapter 1 OST - 02 Beginning"
             "output tracks should match",
         );
     }
+
+    // TODO TEST FOR FOLDER WITH MULTIPLE FILE TYPES, WHERE WE ONLY WANT ONE
+    // TODO TEST COMPILATION IMPORTS
 }
 
 fn basic_test_hierarchy(songs: TestFs, with_library: bool) -> TestFs {

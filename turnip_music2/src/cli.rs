@@ -279,7 +279,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                                 title: meta.title.unwrap_or_else(|| {
                                     let title = filename
                                         .rsplit_once('.')
-                                        .map(|(name, ext)| name)
+                                        .map(|(name, _ext)| name)
                                         .unwrap_or(&filename);
                                     title.to_string()
                                 }),
@@ -309,7 +309,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                     let mut prev_disc = None;
                     let mut prev_track = None;
                     let mut first_item = true;
-                    for (title, meta) in files.iter_mut() {
+                    for (_title, meta) in files.iter_mut() {
                         let curr_disc = meta.disc;
                         let curr_track = meta.track;
 

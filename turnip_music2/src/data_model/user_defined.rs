@@ -6,7 +6,6 @@ use crate::data_model::{
 };
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::Path};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ConfigFileInputs {

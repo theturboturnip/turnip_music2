@@ -38,18 +38,8 @@
 //! - Create .m3u8 files for the compilations
 //!     - Can just delete old ones and remake, no point in doing sensitivity there?
 
-use std::{
-    collections::{HashMap, HashSet},
-    path::{Path, PathBuf},
-};
-
 // use chromaprint::ChromaprintAlgorithm;
 use serde::{Deserialize, Serialize};
-
-use crate::{
-    fs::{Fs, FsPathBuf},
-    resolver::OutputGroupKey,
-};
 
 /// MusicBrainz ID <https://musicbrainz.org/doc/MusicBrainz_Identifier>,
 /// which can be for one of many different kinds of [entities](https://musicbrainz.org/doc/MusicBrainz_Entity)

@@ -1,8 +1,7 @@
 use crate::data_model::{native_metadata, parsed, user_defined};
 use crate::fs::Fs;
 use crate::warning::{Warning, WarningSender};
-use std::collections::HashSet;
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsStr;
 
 #[derive(Debug, Clone)]
 pub struct Group<F: Fs> {
@@ -68,7 +67,7 @@ pub fn scan_library<F: Fs, W: WarningSender<F::PathBuf>>(
         if let Some(path) = s.group_file {
             // TODO this shouldn't go into anyhow, it should use the warner
             let (group_doc, group_struct) = fs.parse_group_file(&path)?;
-            let group = groups.push((path, group_doc, group_struct));
+            groups.push((path, group_doc, group_struct));
             // We do NOT recursive scan, because we assume the group file will cover all children
         } else {
             // Recursive scan
@@ -88,7 +87,6 @@ pub fn scan_library<F: Fs, W: WarningSender<F::PathBuf>>(
         .map(|(toml_path, group_doc, group_struct)| Group {
             doc: group_doc,
             parsed: parsed::GroupFile::from_user(
-                fs,
                 fs.path_parent_dir(toml_path.as_ref()).unwrap().as_ref(),
                 group_struct,
             ),

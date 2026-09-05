@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 /// We want to make sure that when native metadata isn't present, a usable sort key can still be extracted.
 /// People typically number tracks e.g. 1, 2, 3,... 10? 10 should come after 9, which requires parsing multi-digit numbers.
 /// This needs to handle at least two numbers - consider 'disc 1 track 23', but a more general solution is fine.
@@ -26,7 +24,7 @@ impl TitleSortKey {
                 Some(pos) => {
                     let prefix = s[..pos].to_string();
                     let digit_start = &s[pos..];
-                    let mut digit_len = match digit_start.find(|c: char| !c.is_ascii_digit()) {
+                    let digit_len = match digit_start.find(|c: char| !c.is_ascii_digit()) {
                         None => digit_start.len(),
                         Some(p) if p <= 18 => p,
                         // Limit number of digits to parse
@@ -81,8 +79,6 @@ fn test_title_sort_key() {
 #[cfg(test)]
 #[test]
 fn test_title_sort_key_sorting() {
-    use string_literals::s;
-
     let mut keys = vec![
         "Android 18 - Bug Song",
         "Android Attack",

@@ -2,14 +2,13 @@ use crate::{
     data_model::{
         Chromaprint,
         native_metadata::{NativeMetadata, NativeMetadataFormat},
-        user_defined::{self, AlbumFileMeta, ConfigFile, ConfigFileInputs, GroupFile, Origin},
+        user_defined::{self, ConfigFile, ConfigFileInputs, GroupFile, Origin},
     },
     fs::{Fs, FsPathBuf},
 };
-use std::{ffi::OsStr, path::PathBuf};
+use std::ffi::OsStr;
 
 use anyhow::bail;
-use indexmap::IndexMap;
 use string_literals::{s, string_vec};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -73,16 +72,13 @@ impl TestFs {
                             "Path lookup {constant_path_stack:?}: At {curr_path:?} {i} that isn't a directory, tried to traverse into file {next_comp:?} that wasn't a directory"
                         )
                     }
-                    (_, &[]) => unreachable!(),
                 }
             }
             bail!("Mystery error");
         }
-
-        // TODO absolute path support
-        let path = path.as_ref();
     }
 
+    // TODO make this non-recursive
     pub fn overwrite<'s, P: AsRef<<Self as Fs>::Path>>(
         &mut self,
         path: P,
@@ -92,9 +88,8 @@ impl TestFs {
         let path = path.as_ref();
         // Reborrow https://users.rust-lang.org/t/matching-on-mut-self-without-moving-it/101411
         match (&mut *self, &path) {
-            (entry, &[]) => bail!("can't overwrite, empty path"),
+            (_entry, &[]) => bail!("can't overwrite, empty path"),
             (TestFs::Dir(entries), &[name]) => {
-                let mut inserted = false;
                 for (subpath, entry) in entries.iter_mut() {
                     if subpath == name {
                         *entry = file;
@@ -104,7 +99,7 @@ impl TestFs {
                 entries.push((name.clone(), file));
                 Ok(())
             }
-            (entry, &[name]) => bail!("can't overwrite, containing level was not a directory"),
+            (_entry, &[_name]) => bail!("can't overwrite, containing level was not a directory"),
             // local paths (".." not supported)
             (TestFs::Dir(entries), &[next_comp, ..]) if next_comp == "." => {
                 return self.overwrite(&path[1..], file);
@@ -162,7 +157,7 @@ impl Fs for TestFs {
     fn path_parent_dir<'p>(&self, path: &'p Self::Path) -> Option<Self::PathBuf> {
         path.as_ref()
             .split_last()
-            .map(|(last, prelast)| prelast.to_vec())
+            .map(|(_last, prelast)| prelast.to_vec())
     }
 
     fn is_file<P: AsRef<Self::Path>>(&self, path: P) -> bool {
@@ -365,7 +360,7 @@ fn test_config_file() {
     let file =
         debugify_error(fs.parse_config_file(PathBuf::parse_path_from_str("config.tm2.toml")));
     assert_eq!(
-        file.map(|(doc, c)| c),
+        file.map(|(_doc, c)| c),
         Ok(ConfigFile {
             library: ConfigFileInputs {
                 search_paths: string_vec!["example_album"],
@@ -383,7 +378,7 @@ fn test_group_file() {
         fs.parse_group_file(PathBuf::parse_path_from_str("example_album/music.tm2.toml")),
     );
     assert_eq!(
-        file.map(|(doc, g)| g),
+        file.map(|(_doc, g)| g),
         Ok(GroupFile::Album {
             origin: Origin::default(),
             album_art: None,

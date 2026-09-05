@@ -1,5 +1,3 @@
-type TomlDocument = toml_edit::DocumentMut;
-
 pub trait TomlItemExt {
     fn make_table_inline(&mut self);
     fn make_table_regular(&mut self);

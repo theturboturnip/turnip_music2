@@ -1,5 +1,3 @@
-#![allow(unused)] // for now
-
 /// CLI-facing modules, agnostic to filesystem and warning mechanisms
 pub mod cli;
 pub mod data_model;

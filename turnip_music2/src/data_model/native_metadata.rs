@@ -1,4 +1,4 @@
-use std::{ffi::OsStr, path::Path};
+use std::path::Path;
 
 use id3::TagLike;
 use mp4ameta::ChplTimescale;

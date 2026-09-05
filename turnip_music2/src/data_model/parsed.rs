@@ -26,7 +26,7 @@ pub enum GroupFile<F: Fs> {
 }
 
 impl<F: Fs> GroupFile<F> {
-    pub fn from_user(fs: &F, root_path: &F::Path, g: user_defined::GroupFile) -> Self {
+    pub fn from_user(root_path: &F::Path, g: user_defined::GroupFile) -> Self {
         match g {
             user_defined::GroupFile::Compilation {
                 origin,
