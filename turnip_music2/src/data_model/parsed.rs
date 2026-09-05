@@ -140,6 +140,7 @@ impl AlbumFileMeta {
         let mut meta_disc = f.disc.or_else(|| g.disc.clone());
         if meta_disc.is_some() {
             *curr_disc = meta_disc;
+            // TODO should this reset track number?
         } else {
             meta_disc = *curr_disc;
         }

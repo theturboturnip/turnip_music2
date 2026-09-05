@@ -180,15 +180,12 @@ album = "ODD FUTURE"
 
 [files."track01.flac"]
 title = "ODD FUTURE"
-track = 1
 
 [files."track02.flac"]
 title = "PLOT"
-track = 2
 
 [files."track03.flac"]
 title = "CORE STREAM"
-track = 3
 "#,
             "Oddfuture config should be correct"
         );
@@ -205,19 +202,15 @@ album = "SOUVENIR"
 
 [files."track01.flac"]
 title = "SOUVENIR"
-track = 1
 
 [files."track02.flac"]
 title = "クロノスタシス"
-track = 2
 
 [files."track03.flac"]
 title = "窓の中から"
-track = 3
 
 [files."track04.flac"]
 title = "Track 4"
-track = 4
 "#,
             "Souvenir config should be correct"
         );
@@ -366,6 +359,239 @@ track = 4
 
     // TODO TEST FOR FOLDER WITH MULTIPLE FILE TYPES, WHERE WE ONLY WANT ONE
     // TODO TEST COMPILATION IMPORTS
+
+    /// Test that imports of sparse albums work correctly, ordering by native metadata track number, and eliding track numbers ONLY when necessary
+    #[test]
+    fn test_album_with_sparse_native_track_numbers() {
+        let mut fs = basic_test_hierarchy(
+            test_dir!(
+                ("deltarune", deltarune_partial()), //
+            ),
+            true,
+        );
+        let mut warner = vec![];
+
+        let library = || -> anyhow::Result<Option<Library<_>>> {
+            let mut ctx = CliContext::new(None, &mut fs, &mut warner);
+            ctx.import(
+                &vec![s!("songs/deltarune")],
+                None,
+                true,
+                crate::cli::ImportMode::Album,
+            )?;
+            ctx.reload_library()?;
+            Ok(ctx.loaded_library)
+        }();
+
+        assert_eq!(warner, vec![]);
+
+        assert_matches!(
+            fs.traverse(test_path!("songs", "deltarune", "music.tm2.toml")),
+            Ok(TestFs::TextFile(t)) if t ==
+r#"type = "Album"
+
+[origin]
+
+[global]
+album = "DELTARUNE Chapter 1 OST"
+album_artists = ["Toby Fox"]
+
+[files."Toby Fox - DELTARUNE Chapter 1 OST - 01 ANOTHER HIM.mp3"]
+title = "ANOTHER HIM"
+artists = ["Toby Fox"]
+
+[files."Toby Fox - DELTARUNE Chapter 1 OST - 02 Beginning.mp3"]
+title = "Beginning"
+artists = ["Toby Fox"]
+
+[files."Laura Shigihara - DELTARUNE Chapter 1 OST - 39 Don't Forget.mp3"]
+title = "Don't Forget"
+artists = ["Laura Shigihara"]
+track = 39
+"#,
+            "Deltarune config should be correct"
+        );
+
+        assert_matches!(
+            library,
+            Ok(Some(Library {
+                config_file,
+                group_files
+            })),
+            "library must have been made successfully"
+        );
+        let group_files = library.unwrap().unwrap().group_files;
+        assert_eq!(group_files.len(), 1, "should have found deltarune");
+        assert_eq!(
+            group_files[0].toml_path,
+            test_path!("songs", "deltarune", "music.tm2.toml"),
+            "deltarune path should be correct"
+        );
+        assert_matches!(
+            group_files[0],
+            Group {
+                parsed: parsed::GroupFile::Album { files: actual, .. },
+                ..
+            } if actual == &vec![
+                (
+                    test_path!("songs", "deltarune", "Toby Fox - DELTARUNE Chapter 1 OST - 01 ANOTHER HIM.mp3"),
+                    parsed::AlbumFileMeta {
+                        title: s!("ANOTHER HIM"),
+                        artists: vec![s!("Toby Fox")],
+                        genres: vec![],
+                        album: Some(s!("DELTARUNE Chapter 1 OST")),
+                        album_artists: vec![s!("Toby Fox")],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: 1
+                    }
+                ),
+                (
+                    test_path!("songs", "deltarune", "Toby Fox - DELTARUNE Chapter 1 OST - 02 Beginning.mp3"),
+                    parsed::AlbumFileMeta {
+                        title: s!("Beginning"),
+                        artists: vec![s!("Toby Fox")],
+                        genres: vec![],
+                        album: Some(s!("DELTARUNE Chapter 1 OST")),
+                        album_artists: vec![s!("Toby Fox")],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: 2
+                    }
+                ),
+                (
+                    test_path!("songs", "deltarune", "Laura Shigihara - DELTARUNE Chapter 1 OST - 39 Don't Forget.mp3"),
+                    parsed::AlbumFileMeta {
+                        title: s!("Don't Forget"),
+                        artists: vec![s!("Laura Shigihara")],
+                        genres: vec![],
+                        album: Some(s!("DELTARUNE Chapter 1 OST")),
+                        album_artists: vec![s!("Toby Fox")],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: 39,
+                    }
+                ),
+            ],
+            "output tracks should match",
+        );
+    }
+    /// Test that imports of sparse albums work naively when native metadata isn't used
+    #[test]
+    fn test_album_with_sparse_native_track_numbers_no_native_import() {
+        let mut fs = basic_test_hierarchy(
+            test_dir!(
+                ("deltarune", deltarune_partial()), //
+            ),
+            true,
+        );
+        let mut warner = vec![];
+
+        let library = || -> anyhow::Result<Option<Library<_>>> {
+            let mut ctx = CliContext::new(None, &mut fs, &mut warner);
+            ctx.import(
+                &vec![s!("songs/deltarune")],
+                None,
+                false,
+                crate::cli::ImportMode::Album,
+            )?;
+            ctx.reload_library()?;
+            Ok(ctx.loaded_library)
+        }();
+
+        assert_eq!(warner, vec![]);
+
+        assert_matches!(
+            fs.traverse(test_path!("songs", "deltarune", "music.tm2.toml")),
+            Ok(TestFs::TextFile(t)) if t ==
+r#"type = "Album"
+
+[origin]
+
+[global]
+
+[files."Laura Shigihara - DELTARUNE Chapter 1 OST - 39 Don't Forget.mp3"]
+title = "Laura Shigihara - DELTARUNE Chapter 1 OST - 39 Don't Forget"
+
+[files."Toby Fox - DELTARUNE Chapter 1 OST - 01 ANOTHER HIM.mp3"]
+title = "Toby Fox - DELTARUNE Chapter 1 OST - 01 ANOTHER HIM"
+
+[files."Toby Fox - DELTARUNE Chapter 1 OST - 02 Beginning.mp3"]
+title = "Toby Fox - DELTARUNE Chapter 1 OST - 02 Beginning"
+"#,
+            "Deltarune config should be correct"
+        );
+
+        assert_matches!(
+            library,
+            Ok(Some(Library {
+                config_file,
+                group_files
+            })),
+            "library must have been made successfully"
+        );
+        let group_files = library.unwrap().unwrap().group_files;
+        assert_eq!(group_files.len(), 1, "should have found deltarune");
+        assert_eq!(
+            group_files[0].toml_path,
+            test_path!("songs", "deltarune", "music.tm2.toml"),
+            "deltarune path should be correct"
+        );
+        assert_matches!(
+            group_files[0],
+            Group {
+                parsed: parsed::GroupFile::Album { files: actual, .. },
+                ..
+            } if actual == &vec![
+                (
+                    test_path!("songs", "deltarune", "Laura Shigihara - DELTARUNE Chapter 1 OST - 39 Don't Forget.mp3"),
+                    parsed::AlbumFileMeta {
+                        title: s!("Laura Shigihara - DELTARUNE Chapter 1 OST - 39 Don't Forget"),
+                        artists: vec![],
+                        genres: vec![],
+                        album: None,
+                        album_artists: vec![],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: 1,
+                    }
+                ),
+                (
+                    test_path!("songs", "deltarune", "Toby Fox - DELTARUNE Chapter 1 OST - 01 ANOTHER HIM.mp3"),
+                    parsed::AlbumFileMeta {
+                        title: s!("Toby Fox - DELTARUNE Chapter 1 OST - 01 ANOTHER HIM"),
+                        artists: vec![],
+                        genres: vec![],
+                        album: None,
+                        album_artists: vec![],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: 2
+                    }
+                ),
+                (
+                    test_path!("songs", "deltarune", "Toby Fox - DELTARUNE Chapter 1 OST - 02 Beginning.mp3"),
+                    parsed::AlbumFileMeta {
+                        title: s!("Toby Fox - DELTARUNE Chapter 1 OST - 02 Beginning"),
+                        artists: vec![],
+                        genres: vec![],
+                        album: None,
+                        album_artists: vec![],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: 3
+                    }
+                ),
+            ],
+            "output tracks should match",
+        );
+    }
 }
 
 fn basic_test_hierarchy(songs: TestFs, with_library: bool) -> TestFs {
@@ -575,7 +801,7 @@ fn deltarune_partial() -> TestFs {
                     num_discs: None,
                     disc: None,
                     num_tracks: None,
-                    track: Some(3),
+                    track: Some(2),
                     genres: vec![]
                 },
                 None

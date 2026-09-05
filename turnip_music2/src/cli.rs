@@ -236,6 +236,20 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                         .sort_by_key(|(title, meta)| (meta.disc, meta.track, title.clone()));
 
                     // Get globals
+
+                    // If everyone has exactly the same album, that's to be expected.
+                    // If not everyone has the same album, raise a warning
+                    let common_album = where_all_equal(&relevant_songs, |(_, m)| &m.album);
+                    if common_album.is_none() {
+                        self.warner.warn(Warning::AlbumMayBeACompilation {
+                            path: path.clone(),
+                            different_albums: relevant_songs
+                                .iter()
+                                .filter_map(|(_, s)| s.album.clone())
+                                .collect(),
+                        });
+                    }
+
                     let global = user_defined::AlbumGlobalMeta {
                         // For lists, if they are all the same and they are all empty list then treat them as None instead of Some(vec![])
                         artists: pull_empty_to_none(where_all_equal(&relevant_songs, |(_, m)| {
@@ -244,7 +258,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                         genres: pull_empty_to_none(where_all_equal(&relevant_songs, |(_, m)| {
                             &m.genres
                         })),
-                        album: where_all_equal(&relevant_songs, |(_, m)| &m.album).flatten(),
+                        album: common_album.flatten(),
                         album_artists: pull_empty_to_none(where_all_equal(
                             &relevant_songs,
                             |(_, m)| &m.album_artists,
@@ -256,22 +270,18 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                             .flatten(),
                     };
 
-                    if global.album.is_none() {
-                        self.warner.warn(Warning::AlbumMayBeACompilation {
-                            path: path.clone(),
-                            different_albums: relevant_songs
-                                .iter()
-                                .filter_map(|(_, s)| s.album.clone())
-                                .collect(),
-                        });
-                    }
-
                     // Pull out metadata, defaulting the track names to the filenames but otherwise keeping things normal
-                    let files = relevant_songs
+                    let mut files = relevant_songs
                         .into_iter()
-                        .map(|(title, meta)| {
+                        .map(|(filename, meta)| {
                             let meta = user_defined::AlbumFileMeta {
-                                title: meta.title.unwrap_or_else(|| title.clone()),
+                                title: meta.title.unwrap_or_else(|| {
+                                    let title = filename
+                                        .rsplit_once('.')
+                                        .map(|(name, ext)| name)
+                                        .unwrap_or(&filename);
+                                    title.to_string()
+                                }),
                                 artists: userify_vec_if_not_global(&global.artists, meta.artists),
                                 genres: userify_vec_if_not_global(&global.genres, meta.genres),
                                 album: userify_opt_if_not_global(&global.album, meta.album),
@@ -290,9 +300,41 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                                 ),
                                 track: meta.track,
                             };
-                            (title, meta)
+                            (filename, meta)
                         })
                         .collect::<IndexMap<String, _>>();
+
+                    // Check: if the track and disc numbers will be auto-detected correctly, don't include them in the text.
+                    let mut prev_disc = None;
+                    let mut prev_track = None;
+                    let mut first_item = true;
+                    for (title, meta) in files.iter_mut() {
+                        let curr_disc = meta.disc;
+                        let curr_track = meta.track;
+
+                        // If the disc is the same as before, elide it.
+                        // This works for both-None and both-Some.
+                        if curr_disc == prev_disc {
+                            meta.disc = None;
+
+                            // If the track is an increment from a non-None previous track, elide it.
+                            // Never elide the track information if the disc changed.
+
+                            if let Some(prev_track) = prev_track
+                                && let Some(curr_track) = curr_track
+                                && curr_track == prev_track + 1
+                            {
+                                meta.track = None;
+                            } else if first_item && curr_track == Some(1) {
+                                // Also, if this is the first item and the track == 1, elide it - this will be assumed.
+                                meta.track = None;
+                            }
+                        }
+
+                        prev_disc = curr_disc;
+                        prev_track = curr_track;
+                        first_item = false;
+                    }
 
                     // TODO album art handling
 
@@ -367,7 +409,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                         })
                         .collect::<IndexMap<String, _>>();
 
-                    // TODO album art handling
+                    // TODO art handling?
 
                     user_defined::GroupFile::Compilation {
                         origin,
