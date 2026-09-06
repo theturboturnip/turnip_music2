@@ -1,4 +1,7 @@
-use std::{collections::HashSet, ffi::OsStr};
+use std::{
+    collections::{HashMap, HashSet},
+    ffi::OsStr,
+};
 
 use crate::{
     data_model::{
@@ -492,7 +495,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
         // let output_path = self.library_dir.clone().joined();
         let mut exports = ExportContext::<F>::new(config.clone());
 
-        // TODO need some sort of unification process to figure out exactly how many tracks of an album exist (or more accurately what the maximum value of disc and track is/could be)
+        let mut to_export = vec![];
 
         for g in library.group_files.iter() {
             match &g.parsed {
@@ -503,7 +506,8 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                 } => {
                     // Gather exported songs
                     for f in files.iter() {
-                        exports.add_song(f.0.as_ref(), f.1.clone().into(), None, self.warner);
+                        to_export.push((f.0.as_ref(), f.1.clone().into(), None));
+                        // , self.warner);
                     }
                 }
                 parsed::GroupFile::Compilation {
@@ -521,7 +525,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                             let _len_u64: u64 = files.len().try_into().map_err(|_e| anyhow!("Compilation '{compilation_title}' has more songs than fit into a u64. This will never happen."))?;
 
                             for (track, f) in files.iter().enumerate() {
-                                exports.add_song(f.0.as_ref(), NativeMetadata {
+                                to_export.push((f.0.as_ref(), NativeMetadata {
                                         fmt: crate::data_model::native_metadata::NativeMetadataFormat::None,
                                         title: Some(f.1.title.clone()),
                                         artists: f.1.artists.clone(),
@@ -532,25 +536,71 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                                         disc: None,
                                         num_tracks: Some(files.len() as u64),
                                         track: Some(track as u64),
-                                    }, Some(&compilation_title),
-                                    self.warner,);
+                                    }, Some(compilation_title.as_str()),));
+                                // self.warner,);
                             }
                         }
                         // Export songs as normal
                         user_defined::CompilationMode::AsM3u8
                         | user_defined::CompilationMode::Disabled => {
                             for f in files.iter() {
-                                exports.add_song(
+                                to_export.push((
                                     f.0.as_ref(),
                                     f.1.clone().into(),
-                                    Some(&compilation_title),
-                                    self.warner,
-                                );
+                                    Some(compilation_title.as_str()),
+                                    // self.warner,
+                                ));
                             }
                         }
                     };
                 }
             }
+        }
+
+        // Count the number of discs and tracks now that we know how they're exported
+        fn digits(x: Option<u64>) -> usize {
+            match x {
+                None => 0,
+                Some(x) if x < 10 => 1,
+                Some(x) if x < 100 => 2,
+                Some(x) if x < 1000 => 3,
+                Some(x) if x < 10000 => 4,
+                // If you hit this code you are being silly
+                _ => 5,
+            }
+        }
+        let (disc_digits, track_digits) = {
+            // TODO COWs?
+            let mut disc_digits: HashMap<String, usize> = HashMap::new();
+            let mut track_digits: HashMap<String, usize> = HashMap::new();
+            for (_path, f, _comp) in to_export.iter() {
+                if let Some(album) = f.album.as_ref() {
+                    let d = std::cmp::max(digits(f.num_discs), digits(f.disc));
+                    let t = std::cmp::max(digits(f.num_tracks), digits(f.track));
+                    disc_digits
+                        .entry(album.clone())
+                        .and_modify(|curr| *curr = std::cmp::max(*curr, d))
+                        .or_insert(d);
+                    track_digits
+                        .entry(album.clone())
+                        .and_modify(|curr| *curr = std::cmp::max(*curr, t))
+                        .or_insert(t);
+                }
+            }
+
+            (disc_digits, track_digits)
+        };
+
+        for (input_file, metadata, in_compilation) in to_export {
+            let numbering = match metadata.album.as_ref() {
+                Some(a) => NumberContext::Numbered {
+                    disc_digits: *disc_digits.get(a).unwrap(),
+                    track_digits: *track_digits.get(a).unwrap(),
+                },
+                None => NumberContext::NoNumbering,
+            };
+
+            exports.add_song(input_file, metadata, numbering, in_compilation, self.warner);
         }
 
         Ok(exports)
@@ -609,6 +659,7 @@ impl<F: Fs> ExportContext<F> {
         &mut self,
         input_file: &F::Path,
         mut metadata: NativeMetadata,
+        numbering: NumberContext,
         in_compilation: Option<&str>,
         warner: &mut W,
     ) {
@@ -616,11 +667,32 @@ impl<F: Fs> ExportContext<F> {
         let ext = "mp3";
         metadata.fmt = crate::data_model::native_metadata::NativeMetadataFormat::ID3;
 
-        // TODO integrate track numbering
-        let filename = format!("{}.{}", metadata.title.as_ref().unwrap(), ext);
-        //     match (metadata.disc, metadata.track) {
-        //     (Some(disc), Some(track)) =>
-        // }
+        // Apply track numbering
+        let filename = match numbering {
+            NumberContext::Numbered {
+                disc_digits,
+                track_digits,
+            } if disc_digits > 0 && track_digits > 0 => format!(
+                "{:0disc_digits$}{:0track_digits$} - {}.{}",
+                metadata.disc.unwrap_or_default(),
+                metadata.track.unwrap_or_default(),
+                metadata.title.as_ref().unwrap(),
+                ext
+            ),
+            NumberContext::Numbered { track_digits, .. } if track_digits > 0 => format!(
+                "{:0track_digits$} - {}.{}",
+                metadata.track.unwrap_or_default(),
+                metadata.title.as_ref().unwrap(),
+                ext
+            ),
+            NumberContext::Numbered { disc_digits, .. } if disc_digits > 0 => format!(
+                "{:0disc_digits$} - {}.{}",
+                metadata.disc.unwrap_or_default(),
+                metadata.title.as_ref().unwrap(),
+                ext
+            ),
+            _ => format!("{}.{}", metadata.title.as_ref().unwrap(), ext),
+        };
 
         let output_dir: &[&str] = match self.config.output_structure {
             user_defined::FolderStructure::Albums => match &metadata.album {
@@ -683,4 +755,12 @@ impl<F: Fs> ExportContext<F> {
         self.song_exports
             .push((input_file.to_owned(), metadata, output_file));
     }
+}
+
+enum NumberContext {
+    NoNumbering,
+    Numbered {
+        disc_digits: usize,
+        track_digits: usize,
+    },
 }
