@@ -351,26 +351,38 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                     }
                 }
                 ImportMode::Compilation => {
-                    // Don't sort
+                    // Sort by title - might as well use the title-sort-key here
+                    relevant_songs
+                        .sort_by_cached_key(|(title, _meta)| TitleSortKey::parse_from(title));
 
                     // Get the compilation name
-                    let title = self.fs.path_trailing(path.as_ref()).ok_or_else(|| {
+                    let compilation_title = self.fs.path_trailing(path.as_ref()).ok_or_else(|| {
                         anyhow!(
                             "Compilation directory '{:?}' has no trailing path and thus no title",
                             path
                         )
                     })?;
-                    let title = title.to_str().ok_or_else(|| {
-                        anyhow!("Compilation directory '{:?}' was not valid Unicode", title)
+                    let compilation_title = compilation_title.to_str().ok_or_else(|| {
+                        anyhow!(
+                            "Compilation directory '{:?}' was not valid Unicode",
+                            compilation_title
+                        )
                     })?;
-                    let title = title.to_string();
+                    let compilation_title = compilation_title.to_string();
 
                     // Get globals
                     let global = user_defined::CompilationGlobalMeta {
-                        artists: where_all_equal(&relevant_songs, |(_, m)| &m.artists),
-                        genres: where_all_equal(&relevant_songs, |(_, m)| &m.genres),
+                        artists: pull_empty_to_none(where_all_equal(&relevant_songs, |(_, m)| {
+                            &m.artists
+                        })),
+                        genres: pull_empty_to_none(where_all_equal(&relevant_songs, |(_, m)| {
+                            &m.genres
+                        })),
                         album: where_all_equal(&relevant_songs, |(_, m)| &m.album).flatten(),
-                        album_artists: where_all_equal(&relevant_songs, |(_, m)| &m.album_artists),
+                        album_artists: pull_empty_to_none(where_all_equal(
+                            &relevant_songs,
+                            |(_, m)| &m.album_artists,
+                        )),
                         num_discs: where_all_equal(&relevant_songs, |(_, m)| &m.num_discs)
                             .flatten(),
                         disc: where_all_equal(&relevant_songs, |(_, m)| &m.disc).flatten(),
@@ -388,9 +400,15 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                     // Pull out metadata, defaulting the track names to the filenames but otherwise keeping things normal
                     let files = relevant_songs
                         .into_iter()
-                        .map(|(title, meta)| {
+                        .map(|(filename, meta)| {
                             let meta = user_defined::CompilationFileMeta {
-                                title: meta.title.unwrap_or_else(|| title.clone()),
+                                title: meta.title.unwrap_or_else(|| {
+                                    let title = filename
+                                        .rsplit_once('.')
+                                        .map(|(name, _ext)| name)
+                                        .unwrap_or(&filename);
+                                    title.to_string()
+                                }),
                                 artists: userify_vec_if_not_global(&global.artists, meta.artists),
                                 genres: userify_vec_if_not_global(&global.genres, meta.genres),
                                 album: userify_opt_if_not_global(&global.album, meta.album),
@@ -410,7 +428,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                                 track: meta.track,
                                 sort_by_idx: None,
                             };
-                            (title, meta)
+                            (filename, meta)
                         })
                         .collect::<IndexMap<String, _>>();
 
@@ -418,7 +436,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
 
                     user_defined::GroupFile::Compilation {
                         origin,
-                        title,
+                        title: compilation_title,
                         global,
                         files,
                     }

@@ -172,7 +172,7 @@ mod import {
         assert_matches!(
             fs.traverse(test_path!("songs", "oddfuture", "music.tm2.toml")),
             Ok(TestFs::TextFile(t)) if t ==
-r#"type = "Album"
+r#"type = "album"
 
 [origin]
 
@@ -194,7 +194,7 @@ title = "CORE STREAM"
         assert_matches!(
             fs.traverse(test_path!("songs", "souvenir", "music.tm2.toml")),
             Ok(TestFs::TextFile(t)) if t ==
-r#"type = "Album"
+r#"type = "album"
 
 [origin]
 
@@ -389,7 +389,7 @@ title = "Track 4"
         assert_matches!(
             fs.traverse(test_path!("songs", "unpadded", "music.tm2.toml")),
             Ok(TestFs::TextFile(t)) if t ==
-r#"type = "Album"
+r#"type = "album"
 
 [origin]
 
@@ -409,7 +409,7 @@ title = "11-Fish to the Twenty-First Order"
         assert_matches!(
             fs.traverse(test_path!("songs", "zeropadded", "music.tm2.toml")),
             Ok(TestFs::TextFile(t)) if t ==
-r#"type = "Album"
+r#"type = "album"
 
 [origin]
 
@@ -575,7 +575,7 @@ title = "11-Fish to the Twenty-First Order"
         assert_matches!(
             fs.traverse(test_path!("songs", "deltarune", "music.tm2.toml")),
             Ok(TestFs::TextFile(t)) if t ==
-r#"type = "Album"
+r#"type = "album"
 
 [origin]
 
@@ -691,7 +691,7 @@ track = 39
         assert_matches!(
             fs.traverse(test_path!("songs", "deltarune", "music.tm2.toml")),
             Ok(TestFs::TextFile(t)) if t ==
-r#"type = "Album"
+r#"type = "album"
 
 [origin]
 
@@ -774,8 +774,160 @@ title = "Toby Fox - DELTARUNE Chapter 1 OST - 02 Beginning"
         );
     }
 
+    /// Test compilation importing
+    #[test]
+    fn test_import_compilation() {
+        let mut fs = basic_test_hierarchy(
+            test_dir!(
+                (
+                    "Big Anime Compilation",
+                    basic_compilation_embedded_metadata()
+                ), //
+            ),
+            true,
+        );
+        let mut warner = vec![];
+
+        let library = || -> anyhow::Result<Option<Library<_>>> {
+            let mut ctx = CliContext::new(None, &mut fs, &mut warner);
+            ctx.import(
+                &vec![s!("songs/Big Anime Compilation")],
+                None,
+                true,
+                crate::cli::ImportMode::Compilation,
+            )?;
+            ctx.reload_library()?;
+            Ok(ctx.loaded_library)
+        }();
+
+        assert_eq!(warner, vec![]);
+
+        assert_matches!(
+            fs.traverse(test_path!("songs", "Big Anime Compilation", "music.tm2.toml")),
+            Ok(TestFs::TextFile(t)) if t ==
+r#"type = "compilation"
+title = "Big Anime Compilation"
+
+[origin]
+
+[global]
+
+[files."Akatsuki Arrival.mp3"]
+title = "Akatsuki Arrival"
+artists = ["Hatsune Miku", "Megurine Luka"]
+
+[files."Datte Atashino Hero.mp3"]
+title = "Datte Atashino Hero"
+artists = ["LiSA"]
+
+[files."Ideal White.mp3"]
+title = "Ideal White"
+artists = ["Mashiro Ayano"]
+
+[files."Light in Starless Sky.mp3"]
+title = "Light in Starless Sky"
+artists = ["Lotus Juice"]
+
+[files."Misc Artistless Song.mp3"]
+title = "Misc Artistless Song"
+"#,
+            "config should be correct"
+        );
+
+        assert_matches!(
+            library,
+            Ok(Some(Library { .. })),
+            "library must have been made successfully"
+        );
+        let group_files = library.unwrap().unwrap().group_files;
+        assert_eq!(group_files.len(), 1, "should have found group");
+        assert_eq!(
+            group_files[0].toml_path,
+            test_path!("songs", "Big Anime Compilation", "music.tm2.toml"),
+            "group path should be correct"
+        );
+        assert_matches!(
+            group_files[0],
+            Group {
+                parsed: parsed::GroupFile::Compilation { files: actual, .. },
+                ..
+            } if actual == &vec![
+                (
+                    test_path!("songs", "Big Anime Compilation", "Akatsuki Arrival.mp3"),
+                    parsed::CompilationFileMeta {
+                        title: s!("Akatsuki Arrival"),
+                        artists: vec![s!("Hatsune Miku"), s!("Megurine Luka")],
+                        genres: vec![],
+                        album: None,
+                        album_artists: vec![],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: None,
+                    }
+                ),
+                (
+                    test_path!("songs", "Big Anime Compilation", "Datte Atashino Hero.mp3"),
+                    parsed::CompilationFileMeta {
+                        title: s!("Datte Atashino Hero"),
+                        artists: vec![s!("LiSA")],
+                        genres: vec![],
+                        album: None,
+                        album_artists: vec![],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: None,
+                    }
+                ),
+                (
+                    test_path!("songs", "Big Anime Compilation", "Ideal White.mp3"),
+                    parsed::CompilationFileMeta {
+                        title: s!("Ideal White"),
+                        artists: vec![s!("Mashiro Ayano")],
+                        genres: vec![],
+                        album: None,
+                        album_artists: vec![],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: None,
+                    }
+                ),
+                (
+                    test_path!("songs", "Big Anime Compilation", "Light in Starless Sky.mp3"),
+                    parsed::CompilationFileMeta {
+                        title: s!("Light in Starless Sky"),
+                        artists: vec![s!("Lotus Juice")],
+                        genres: vec![],
+                        album: None,
+                        album_artists: vec![],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: None,
+                    }
+                ),
+                (
+                    test_path!("songs", "Big Anime Compilation", "Misc Artistless Song.mp3"),
+                    parsed::CompilationFileMeta {
+                        title: s!("Misc Artistless Song"),
+                        artists: vec![],
+                        genres: vec![],
+                        album: None,
+                        album_artists: vec![],
+                        num_discs: None,
+                        disc: None,
+                        num_tracks: None,
+                        track: None,
+                    }
+                ),
+            ],
+            "output tracks should match",
+        );
+    }
+
     // TODO TEST FOR FOLDER WITH MULTIPLE FILE TYPES, WHERE WE ONLY WANT ONE
-    // TODO TEST COMPILATION IMPORTS
 }
 
 fn basic_test_hierarchy(songs: TestFs, with_library: bool) -> TestFs {
@@ -1023,6 +1175,87 @@ fn basic_unpadded_tracks() -> TestFs {
         ),
         (
             "11-Fish to the Twenty-First Order.wav",
+            TestFs::MusicFile(NativeMetadata::default(), None)
+        ),
+    )
+}
+
+fn basic_compilation_embedded_metadata() -> TestFs {
+    test_dir!(
+        (
+            "Ideal White.mp3",
+            TestFs::MusicFile(
+                NativeMetadata {
+                    fmt: NativeMetadataFormat::ID3,
+                    title: Some(s!("Ideal White")),
+                    album: None,
+                    album_artists: vec![],
+                    artists: vec![s!("Mashiro Ayano")],
+                    num_discs: None,
+                    disc: None,
+                    num_tracks: None,
+                    track: None,
+                    genres: vec![]
+                },
+                None
+            )
+        ),
+        (
+            "Datte Atashino Hero.mp3",
+            TestFs::MusicFile(
+                NativeMetadata {
+                    fmt: NativeMetadataFormat::ID3,
+                    title: Some(s!("Datte Atashino Hero")),
+                    album: None,
+                    album_artists: vec![],
+                    artists: vec![s!("LiSA")],
+                    num_discs: None,
+                    disc: None,
+                    num_tracks: None,
+                    track: None,
+                    genres: vec![]
+                },
+                None
+            )
+        ),
+        (
+            "Akatsuki Arrival.mp3",
+            TestFs::MusicFile(
+                NativeMetadata {
+                    fmt: NativeMetadataFormat::ID3,
+                    title: Some(s!("Akatsuki Arrival")),
+                    album: None,
+                    album_artists: vec![],
+                    artists: vec![s!("Hatsune Miku"), s!("Megurine Luka")],
+                    num_discs: None,
+                    disc: None,
+                    num_tracks: None,
+                    track: None,
+                    genres: vec![]
+                },
+                None
+            )
+        ),
+        (
+            "Light in Starless Sky.mp3",
+            TestFs::MusicFile(
+                NativeMetadata {
+                    fmt: NativeMetadataFormat::ID3,
+                    title: Some(s!("Light in Starless Sky")),
+                    album: None,
+                    album_artists: vec![],
+                    artists: vec![s!("Lotus Juice")],
+                    num_discs: None,
+                    disc: None,
+                    num_tracks: None,
+                    track: None,
+                    genres: vec![]
+                },
+                None
+            )
+        ),
+        (
+            "Misc Artistless Song.mp3",
             TestFs::MusicFile(NativeMetadata::default(), None)
         ),
     )

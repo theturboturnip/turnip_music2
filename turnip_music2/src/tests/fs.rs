@@ -268,7 +268,7 @@ search_paths=["example_album"]
                     "music.tm2.toml",
                     TestFs::TextFile(
                         r#"
-type="Album"
+type="album"
 # exclude album_art_rel_path
 
 [origin]
