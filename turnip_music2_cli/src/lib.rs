@@ -11,7 +11,7 @@ impl<PathBuf: Clone + PartialEq + Eq + std::fmt::Debug> WarningSender<PathBuf> f
                 => {
                 log::error!("{w:?}")
             }
-            Warning::OrphanedSongs { .. } | Warning::CompilationMayBeAnAlbum { .. } | Warning::AlbumMayBeACompilation { .. } => log::warn!("{w:?}"),
+            Warning::OrphanedSongs { .. } | Warning::CompilationMayBeAnAlbum { .. } | Warning::AlbumMayBeACompilation { .. } | Warning::DuplicateOutputFile { .. } => log::warn!("{w:?}"),
         }
     }
 }

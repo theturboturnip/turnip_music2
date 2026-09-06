@@ -22,13 +22,21 @@ pub enum Warning<PathBuf: Clone + PartialEq + Eq> {
         files: Vec<PathBuf>,
     },
     /// Cannot import a directory when the TOML file already exists
-    GroupTomlAlreadyExists { path: PathBuf },
+    GroupTomlAlreadyExists {
+        path: PathBuf,
+    },
     /// All the songs in a compilation are in the same album?
-    CompilationMayBeAnAlbum { path: PathBuf, common_album: String },
+    CompilationMayBeAnAlbum {
+        path: PathBuf,
+        common_album: String,
+    },
     /// Not all the songs in an album are tagged with the same album?
     AlbumMayBeACompilation {
         path: PathBuf,
         different_albums: HashSet<String>,
+    },
+    DuplicateOutputFile {
+        path: PathBuf,
     },
 }
 

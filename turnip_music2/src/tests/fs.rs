@@ -35,6 +35,10 @@ impl FsPathBuf<[String]> for Vec<String> {
     fn build<S: AsRef<str>, I: Iterator<Item = S>>(components: I) -> Self {
         components.map(|s| s.as_ref().to_string()).collect()
     }
+
+    fn map<F: FnMut(&str) -> String>(&self, mut f: F) -> Self {
+        self.iter().map(|s| f(s)).collect()
+    }
 }
 
 impl TestFs {

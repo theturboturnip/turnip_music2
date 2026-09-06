@@ -463,7 +463,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
         Ok(())
     }
 
-    pub fn export(&self, config: &str) -> anyhow::Result<ExportContext<F>> {
+    pub fn export(&mut self, config: &str) -> anyhow::Result<ExportContext<F>> {
         if self.loaded_library.is_none() {
             // TODO warning
             bail!("No loaded library")
@@ -503,7 +503,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                 } => {
                     // Gather exported songs
                     for f in files.iter() {
-                        exports.add_song(f.0.as_ref(), f.1.clone().into(), None);
+                        exports.add_song(f.0.as_ref(), f.1.clone().into(), None, self.warner);
                     }
                 }
                 parsed::GroupFile::Compilation {
@@ -532,7 +532,8 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                                         disc: None,
                                         num_tracks: Some(files.len() as u64),
                                         track: Some(track as u64),
-                                    }, Some(&compilation_title));
+                                    }, Some(&compilation_title),
+                                    self.warner,);
                             }
                         }
                         // Export songs as normal
@@ -543,6 +544,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                                     f.0.as_ref(),
                                     f.1.clone().into(),
                                     Some(&compilation_title),
+                                    self.warner,
                                 );
                             }
                         }
@@ -564,6 +566,7 @@ pub struct ExportContext<F: Fs> {
     pub song_exports: Vec<(F::PathBuf, NativeMetadata, F::PathBuf)>,
     /// title -> (m3u8_path, lib-relative song_paths)
     pub m3u8_exports: IndexMap<String, (F::PathBuf, Vec<F::PathBuf>)>,
+    all_outputs: HashSet<F::PathBuf>,
 }
 impl<F: Fs> ExportContext<F> {
     fn new(config: ExportConfig) -> Self {
@@ -576,14 +579,38 @@ impl<F: Fs> ExportContext<F> {
             folders_to_make,
             song_exports: vec![],
             m3u8_exports: IndexMap::new(),
+            all_outputs: HashSet::new(),
         }
     }
 
-    fn add_song(
+    fn check_duplicate_file<W: WarningSender<F::PathBuf>>(
+        &mut self,
+        path: F::PathBuf,
+        warner: &mut W,
+    ) {
+        let path = if self
+            .config
+            .target_charset
+            .unwrap_or_default()
+            .case_insensitive()
+        {
+            path.map(|s| s.to_ascii_uppercase())
+        } else {
+            path
+        };
+        if self.all_outputs.contains(&path) {
+            warner.warn(Warning::DuplicateOutputFile { path });
+        } else {
+            self.all_outputs.insert(path);
+        }
+    }
+
+    fn add_song<W: WarningSender<F::PathBuf>>(
         &mut self,
         input_file: &F::Path,
         mut metadata: NativeMetadata,
         in_compilation: Option<&str>,
+        warner: &mut W,
     ) {
         // TODO code for figuring out the target format
         let ext = "mp3";
@@ -617,13 +644,24 @@ impl<F: Fs> ExportContext<F> {
             }
         };
 
-        // TODO handle charsets and deduplication for directory
-        let output_dir = F::PathBuf::build(output_dir.iter());
+        // Build output directory, being mindful of charset
+        let output_dir = F::PathBuf::build(
+            output_dir
+                .iter()
+                .map(|s| self.config.target_charset.unwrap_or_default().sanitize(s)),
+        );
+        // Add it to the list of outputted files
+        self.check_duplicate_file(output_dir.clone(), warner);
         self.folders_to_make.insert(output_dir.clone());
 
-        // TODO handle charsets and deduplication for filename
-
+        // Handle charsets and deduplication for filename
+        let filename = self
+            .config
+            .target_charset
+            .unwrap_or_default()
+            .sanitize(&filename);
         let output_file = output_dir.joined(&filename);
+        self.check_duplicate_file(output_file.clone(), warner);
 
         if let Some(compilation_title) = in_compilation
             && self.config.compilation_mode.unwrap_or_default() == AsM3u8

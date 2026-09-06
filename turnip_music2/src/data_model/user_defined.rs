@@ -31,20 +31,19 @@ impl ConfigFile {
     }
 }
 
+/// TODO this should ban Unicode control characters
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ExportCharset {
-    /// No substitutions, UTF-8 encoding.
+    /// UTF-8 encoding.
+    /// No substitutions.
+    ///
     /// Case-sensitive.
     #[default]
     Unrestricted,
     /// UTF-8 base encoding.
-    /// Substitutes the banned characters `\/.?*¥`:
-    /// - `\/` as `|`
-    /// - `¥` as `Y`
-    /// - `.*?` as `-`
+    /// Substitutes the banned characters `\/.?*¥` for `-`.
     ///
-    /// Outright bans the ASCII control characters 0x00-0x1F.
     /// Case-insensitive. (Yes, on Linux it can be case-sensitive, but there are enough case-insensitive consumers that we should err on the side of caution.)
     ///
     /// <https://learn.microsoft.com/en-us/windows/win32/intl/character-sets-used-in-file-names>
@@ -52,17 +51,33 @@ pub enum ExportCharset {
     /// Alias for NTFS.
     Fat,
     /// UTF-8 base encoding.
-    /// Substitutes the banned characters `"*/:<>?\|`:
-    /// - `"` as `'`
-    /// - `\/|*?` as '-'
-    /// - `:` as `;`
-    /// - `<>` as `[]`
+    /// Substitutes the banned characters `"*/:<>?\|` for `-`.
     ///
-    /// Outright bans the ASCII control characters 0x00-0x1F.
-    /// Case-insensitive by specification.
+    /// Case-insensitive by specification. The definition of 'case' is FILESYSTEM DEPDENDENT???
     ///
     /// <https://learn.microsoft.com/en-us/windows/win32/fileio/exfat-specification#table-35-invalid-filename-characters>
     Exfat,
+}
+impl ExportCharset {
+    pub fn case_insensitive(self) -> bool {
+        match self {
+            ExportCharset::Unrestricted => false,
+            ExportCharset::Ntfs | ExportCharset::Fat | ExportCharset::Exfat => true,
+        }
+    }
+    pub fn excluded_chars(self) -> &'static str {
+        match self {
+            ExportCharset::Unrestricted => "",
+            ExportCharset::Ntfs | ExportCharset::Fat => r#"\/.?*¥"#,
+            ExportCharset::Exfat => r#""*/:<>?\|"#,
+        }
+    }
+    pub fn sanitize(self, s: &str) -> String {
+        let excluded = self.excluded_chars();
+        s.chars()
+            .map(|c| if excluded.contains(c) { '-' } else { c })
+            .collect()
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]

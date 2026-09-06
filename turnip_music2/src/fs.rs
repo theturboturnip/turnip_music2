@@ -12,6 +12,8 @@ pub trait FsPathBuf<Path: ?Sized>:
     fn build<S: AsRef<str>, I: Iterator<Item = S>>(components: I) -> Self;
     /// Return the path, having added one or more components as parsed from the argument.
     fn joined(self, p: &str) -> Self;
+    /// Applies the function to every path component and returns a copy
+    fn map<F: FnMut(&str) -> String>(&self, f: F) -> Self;
 }
 
 /// Minimal trait encoding only the necessary components of a filesystem scanner.
@@ -73,6 +75,12 @@ impl FsPathBuf<std::path::Path> for std::path::PathBuf {
             s.push(std::path::Path::new(c.as_ref()));
         }
         s
+    }
+
+    fn map<F: FnMut(&str) -> String>(&self, mut f: F) -> Self {
+        self.components()
+            .map(|c| f(c.as_os_str().to_str().expect("don't do this to me.")))
+            .collect()
     }
 }
 impl Fs for StdFs {
