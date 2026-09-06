@@ -1,3 +1,7 @@
+//! This module defines the schemas for the TOML files
+//! - `library.tm2.toml` [ConfigFile], which controls input and export settings.
+//! - `music.tm2.toml` [GroupFile], which defines metadata for individual groups of songs.
+
 use crate::data_model::{
     CddbDiscId,
     MbDiscId,
@@ -15,7 +19,7 @@ pub struct ConfigFileInputs {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct ConfigFile {
     pub library: ConfigFileInputs,
-    pub exports: Option<IndexMap<String, ExportParams>>,
+    pub exports: Option<IndexMap<String, ExportConfig>>,
 }
 impl ConfigFile {
     pub const TOML_FILE_NAME: &'static str = "library.tm2.toml";
@@ -27,10 +31,73 @@ impl ConfigFile {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ExportCharset {
+    /// No substitutions, UTF-8 encoding.
+    /// Case-sensitive.
+    #[default]
+    Unrestricted,
+    /// UTF-8 base encoding.
+    /// Substitutes the banned characters `\/.?*¥`:
+    /// - `\/` as `|`
+    /// - `¥` as `Y`
+    /// - `.*?` as `-`
+    ///
+    /// Outright bans the ASCII control characters 0x00-0x1F.
+    /// Case-insensitive. (Yes, on Linux it can be case-sensitive, but there are enough case-insensitive consumers that we should err on the side of caution.)
+    ///
+    /// <https://learn.microsoft.com/en-us/windows/win32/intl/character-sets-used-in-file-names>
+    Ntfs,
+    /// Alias for NTFS.
+    Fat,
+    /// UTF-8 base encoding.
+    /// Substitutes the banned characters `"*/:<>?\|`:
+    /// - `"` as `'`
+    /// - `\/|*?` as '-'
+    /// - `:` as `;`
+    /// - `<>` as `[]`
+    ///
+    /// Outright bans the ASCII control characters 0x00-0x1F.
+    /// Case-insensitive by specification.
+    ///
+    /// <https://learn.microsoft.com/en-us/windows/win32/fileio/exfat-specification#table-35-invalid-filename-characters>
+    Exfat,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum CompilationMode {
+    /// Export all constituent songs normally, and generate .m3u8 files at the root of the output that point to them.
+    #[default]
+    AsM3u8,
+    /// For each compilation, export all constituent songs as if `album="{compilation.title}"`, `album_artists=["Compilation"]`, `disc=None`, `num_discs=None`, `num_tracks={compilation.len()}` and `track` is set based on the sorted compilation order.
+    /// This overrides metadata and ignores prior values.
+    AsAlbum,
+    /// Export all constituent songs, but do not export the compilations in anyway.
+    Disabled,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum FolderStructure {
+    /// `album/song`
+    #[default]
+    Albums,
+    /// `song`
+    Song,
+    /// `album_artist[0]/album/song`
+    AlbumArtistAlbums,
+    /// `artist[0]/album/song`
+    ArtistAlbums,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct ExportParams {
+pub struct ExportConfig {
     /// Target output directory
     pub output_path: String,
+    /// Target output directory structure
+    pub output_structure: FolderStructure,
     /// zero or more target output formats.
     /// if empty, songs will never be reencoded.
     /// otherwise, if a song is not in any listed format, it will be reencoded as the first format.
@@ -50,9 +117,13 @@ pub struct ExportParams {
     /// songs will not be reencoded if they are already in a target format AND if their bitrate does not exceed this.
     /// in kilobits per second
     pub max_bitrate: Option<u64>,
+    /// Filepaths will be changed to adhere to these requirements.
+    pub target_charset: Option<ExportCharset>,
+    /// How to export compilations.
+    pub compilation_mode: Option<CompilationMode>,
     // TODO
-    // pub target_charset: ExportCharset::NTFS,
     // pub album_art: AlbumArtMode,
+    // pub tag_mode: TagMode, // This may take precedence over compilation_mode if the concepts are merged.
 }
 
 /// A set of concrete sources for metadata, controlled by the user, that are never discarded.
@@ -71,8 +142,11 @@ pub struct Origin {
     pub cddb_discid: Option<CddbDiscId>,
 }
 
+/// Definition of `music.tm2.toml`.
+///
+/// Tagged enum, so the toplevel of the TOML file should be `type = "album"` or `type = "compilation"`.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum GroupFile {
     Compilation {
         origin: Origin,

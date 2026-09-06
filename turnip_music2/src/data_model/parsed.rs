@@ -1,5 +1,5 @@
 use crate::{
-    data_model::user_defined,
+    data_model::{native_metadata::NativeMetadata, user_defined},
     fs::{Fs, FsPathBuf},
 };
 
@@ -183,6 +183,22 @@ impl AlbumFileMeta {
         }
     }
 }
+impl From<AlbumFileMeta> for NativeMetadata {
+    fn from(value: AlbumFileMeta) -> Self {
+        Self {
+            fmt: super::native_metadata::NativeMetadataFormat::None,
+            title: Some(value.title),
+            album: value.album,
+            album_artists: value.album_artists,
+            artists: value.artists,
+            num_discs: value.num_discs,
+            disc: value.disc,
+            num_tracks: value.num_tracks,
+            track: Some(value.track),
+            genres: value.genres,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompilationFileMeta {
@@ -230,5 +246,21 @@ impl CompilationFileMeta {
             },
             f.sort_by_idx,
         )
+    }
+}
+impl From<CompilationFileMeta> for NativeMetadata {
+    fn from(value: CompilationFileMeta) -> Self {
+        Self {
+            fmt: super::native_metadata::NativeMetadataFormat::None,
+            title: Some(value.title),
+            album: value.album,
+            album_artists: value.album_artists,
+            artists: value.artists,
+            num_discs: value.num_discs,
+            disc: value.disc,
+            num_tracks: value.num_tracks,
+            track: value.track,
+            genres: value.genres,
+        }
     }
 }

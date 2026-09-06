@@ -8,7 +8,8 @@ use crate::data_model::{
 pub trait FsPathBuf<Path: ?Sized>:
     Clone + Hash + Debug + PartialEq + Eq + PartialOrd + Ord
 {
-    fn parse_path_from_str(s: &str) -> Self;
+    fn parse_path_from_user_str(s: &str) -> Self;
+    fn build<S: AsRef<str>, I: Iterator<Item = S>>(components: I) -> Self;
     /// Return the path, having added one or more components as parsed from the argument.
     fn joined(self, p: &str) -> Self;
 }
@@ -56,7 +57,7 @@ pub trait Fs {
 
 pub struct StdFs;
 impl FsPathBuf<std::path::Path> for std::path::PathBuf {
-    fn parse_path_from_str(s: &str) -> Self {
+    fn parse_path_from_user_str(s: &str) -> Self {
         // This parses multiple path components from the string, instead of creating a single
         std::path::PathBuf::from(s)
     }
@@ -64,6 +65,14 @@ impl FsPathBuf<std::path::Path> for std::path::PathBuf {
     fn joined(mut self, p: &str) -> Self {
         std::path::PathBuf::push(&mut self, std::path::PathBuf::from(p));
         self
+    }
+
+    fn build<S: AsRef<str>, I: Iterator<Item = S>>(components: I) -> Self {
+        let mut s = Self::new();
+        for c in components {
+            s.push(std::path::Path::new(c.as_ref()));
+        }
+        s
     }
 }
 impl Fs for StdFs {

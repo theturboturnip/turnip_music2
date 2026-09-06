@@ -3,7 +3,8 @@ use std::{collections::HashSet, ffi::OsStr};
 use crate::{
     data_model::{
         native_metadata::NativeMetadata,
-        user_defined::{self, ConfigFile, ConfigFileInputs, ExportParams},
+        parsed,
+        user_defined::{self, CompilationMode::AsM3u8, ConfigFile, ConfigFileInputs, ExportConfig},
     },
     fs::{Fs, FsPathBuf},
     scanner::{Group, scan_dir, scan_library},
@@ -11,7 +12,7 @@ use crate::{
     util::TitleSortKey,
     warning::{Warning, WarningSender},
 };
-use anyhow::anyhow;
+use anyhow::{anyhow, bail};
 use indexmap::IndexMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,14 +56,14 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
     pub fn new(library: Option<String>, fs: &'a mut F, warner: &'a mut W) -> Self {
         let config_path = match library {
             Some(p) => {
-                let p = F::PathBuf::parse_path_from_str(&p);
+                let p = F::PathBuf::parse_path_from_user_str(&p);
                 if fs.is_dir(&p) || fs.path_ext(p.as_ref()).is_none() {
                     p.joined(ConfigFile::TOML_FILE_NAME)
                 } else {
                     p
                 }
             }
-            None => F::PathBuf::parse_path_from_str(ConfigFile::TOML_FILE_NAME),
+            None => F::PathBuf::parse_path_from_user_str(ConfigFile::TOML_FILE_NAME),
         };
         let library_dir = fs
             .path_parent_dir(config_path.as_ref())
@@ -126,12 +127,15 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
             },
             exports: if generate_basic_exports {
                 Some(indexmap::indexmap! {
-                    "mp3".to_string() => ExportParams {
-                        output_path: "output".to_string(),
-                        target_format: vec!["mp3".to_string()],
-                        reencode_params: None,
-                        target_bitrate: Some(128),
-                        max_bitrate: Some(320)
+                    "mp3".to_string() => ExportConfig {
+                        output_path:"output".to_string(),
+                        target_format:vec!["mp3".to_string()],
+                        reencode_params:None,
+                        target_bitrate:Some(128),
+                        max_bitrate:Some(320),
+                        output_structure: user_defined::FolderStructure::Albums,
+                        target_charset: Some(user_defined::ExportCharset::Ntfs),
+                        compilation_mode: Some(user_defined::CompilationMode::AsM3u8)
                     }
                 })
             } else {
@@ -164,7 +168,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
             formats.map(|formats| HashSet::from_iter(formats.iter().map(OsStr::new)));
 
         for f in folders {
-            let path = F::PathBuf::parse_path_from_str(f);
+            let path = F::PathBuf::parse_path_from_user_str(f);
             let s = scan_dir(self.fs, path.as_ref())?;
 
             if let Some(path) = s.group_file {
@@ -439,5 +443,188 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
         // TODO rescan
 
         Ok(())
+    }
+
+    pub fn export(&self, config: &str) -> anyhow::Result<ExportContext<F>> {
+        if self.loaded_library.is_none() {
+            // TODO warning
+            bail!("No loaded library")
+        }
+        let library = self.loaded_library.as_ref().unwrap();
+        if library.config_file.exports.is_none() {
+            bail!("Loaded library has no export parameters - edit TOML")
+        }
+        let config = library
+            .config_file
+            .exports
+            .as_ref()
+            .unwrap()
+            .get(config)
+            .ok_or_else(|| {
+                anyhow!(
+                    "Export config '{}' doesn't exist in the library config TOML",
+                    config
+                )
+            })?;
+
+        // Gather info on songs
+        // TODO GroupFile.files needs to be agnostic... the only diff between album and compilation types is Optional<u64> track.
+        // Alternatively, could filter both into NativeMetadata...
+
+        // let output_path = self.library_dir.clone().joined();
+        let mut exports = ExportContext::<F>::new(config.clone());
+
+        // TODO need some sort of unification process to figure out exactly how many tracks of an album exist (or more accurately what the maximum value of disc and track is/could be)
+
+        for g in library.group_files.iter() {
+            match &g.parsed {
+                parsed::GroupFile::Album {
+                    origin,
+                    album_art,
+                    files,
+                } => {
+                    // Gather exported songs
+                    for f in files.iter() {
+                        exports.add_song(f.0.as_ref(), f.1.clone().into(), None);
+                    }
+                }
+                parsed::GroupFile::Compilation {
+                    origin,
+                    title: compilation_title,
+                    files,
+                } => {
+                    // Gather exported songs
+                    match config.compilation_mode.unwrap_or_default() {
+                        user_defined::CompilationMode::AsAlbum => {
+                            let album = compilation_title.to_string();
+                            let album_artists = vec!["Compilation".to_string()];
+
+                            // Check the length fits into u64. This is literally never going to not happen.
+                            let _len_u64: u64 = files.len().try_into().map_err(|_e| anyhow!("Compilation '{compilation_title}' has more songs than fit into a u64. This will never happen."))?;
+
+                            for (track, f) in files.iter().enumerate() {
+                                exports.add_song(f.0.as_ref(), NativeMetadata {
+                                        fmt: crate::data_model::native_metadata::NativeMetadataFormat::None,
+                                        title: Some(f.1.title.clone()),
+                                        artists: f.1.artists.clone(),
+                                        genres: f.1.genres.clone(),
+                                        album: Some(album.clone()),
+                                        album_artists: album_artists.clone(),
+                                        num_discs: None,
+                                        disc: None,
+                                        num_tracks: Some(files.len() as u64),
+                                        track: Some(track as u64),
+                                    }, Some(&compilation_title));
+                            }
+                        }
+                        // Export songs as normal
+                        user_defined::CompilationMode::AsM3u8
+                        | user_defined::CompilationMode::Disabled => {
+                            for f in files.iter() {
+                                exports.add_song(
+                                    f.0.as_ref(),
+                                    f.1.clone().into(),
+                                    Some(&compilation_title),
+                                );
+                            }
+                        }
+                    };
+                }
+            }
+        }
+
+        Ok(exports)
+    }
+}
+
+pub struct ExportContext<F: Fs> {
+    config: ExportConfig,
+
+    /// lib-relative output paths to create
+    pub folders_to_make: HashSet<F::PathBuf>,
+    /// lib-relative input_path, metadata, lib-relative output_path
+    pub song_exports: Vec<(F::PathBuf, NativeMetadata, F::PathBuf)>,
+    /// title -> (m3u8_path, lib-relative song_paths)
+    pub m3u8_exports: IndexMap<String, (F::PathBuf, Vec<F::PathBuf>)>,
+}
+impl<F: Fs> ExportContext<F> {
+    fn new(config: ExportConfig) -> Self {
+        let output_path = F::PathBuf::parse_path_from_user_str(&config.output_path);
+        let mut folders_to_make = HashSet::new();
+        folders_to_make.insert(output_path);
+
+        Self {
+            config,
+            folders_to_make,
+            song_exports: vec![],
+            m3u8_exports: IndexMap::new(),
+        }
+    }
+
+    fn add_song(
+        &mut self,
+        input_file: &F::Path,
+        mut metadata: NativeMetadata,
+        in_compilation: Option<&str>,
+    ) {
+        // TODO code for figuring out the target format
+        let ext = "mp3";
+        metadata.fmt = crate::data_model::native_metadata::NativeMetadataFormat::ID3;
+
+        // TODO integrate track numbering
+        let filename = format!("{}.{}", metadata.title.as_ref().unwrap(), ext);
+        //     match (metadata.disc, metadata.track) {
+        //     (Some(disc), Some(track)) =>
+        // }
+
+        let output_dir: &[&str] = match self.config.output_structure {
+            user_defined::FolderStructure::Albums => match &metadata.album {
+                Some(album) => &[album],
+                None => &[],
+            },
+            user_defined::FolderStructure::Song => &[],
+            user_defined::FolderStructure::AlbumArtistAlbums => {
+                match (metadata.album_artists.as_slice(), &metadata.album) {
+                    ([artist, ..], Some(album)) => &[artist, album],
+                    ([], Some(album)) => &[album],
+                    _ => &[],
+                }
+            }
+            user_defined::FolderStructure::ArtistAlbums => {
+                match (metadata.artists.as_slice(), &metadata.album) {
+                    ([artist, ..], Some(album)) => &[artist, album],
+                    ([], Some(album)) => &[album],
+                    _ => &[],
+                }
+            }
+        };
+
+        // TODO handle charsets and deduplication for directory
+        let output_dir = F::PathBuf::build(output_dir.iter());
+        self.folders_to_make.insert(output_dir.clone());
+
+        // TODO handle charsets and deduplication for filename
+
+        let output_file = output_dir.joined(&filename);
+
+        if let Some(compilation_title) = in_compilation
+            && self.config.compilation_mode.unwrap_or_default() == AsM3u8
+        {
+            match self.m3u8_exports.get_mut(compilation_title) {
+                Some((_existing_path, songs)) => songs.push(output_file.clone()),
+                None => {
+                    self.m3u8_exports.insert(
+                        compilation_title.to_string(),
+                        (
+                            F::PathBuf::build([format!("{}.m3u8", compilation_title)].iter()),
+                            vec![output_file.clone()],
+                        ),
+                    );
+                }
+            }
+        }
+
+        self.song_exports
+            .push((input_file.to_owned(), metadata, output_file));
     }
 }

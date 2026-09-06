@@ -23,13 +23,17 @@ pub enum TestFs {
 /// TODO absolute path support
 /// TODO ../ support
 impl FsPathBuf<[String]> for Vec<String> {
-    fn parse_path_from_str(s: &str) -> Self {
+    fn parse_path_from_user_str(s: &str) -> Self {
         s.split("/").map(|s| s.to_owned()).collect()
     }
 
     fn joined(mut self, p: &str) -> Self {
-        self.extend(Self::parse_path_from_str(p));
+        self.extend(Self::parse_path_from_user_str(p));
         self
+    }
+
+    fn build<S: AsRef<str>, I: Iterator<Item = S>>(components: I) -> Self {
+        components.map(|s| s.as_ref().to_string()).collect()
     }
 }
 
@@ -311,8 +315,11 @@ fn debugify_error<T, E: std::fmt::Debug>(r: Result<T, E>) -> Result<T, String> {
 fn test_traverse() {
     type PathBuf = <TestFs as Fs>::PathBuf;
     let fs = test_hierarchy();
-    assert!(fs.read_dir(PathBuf::parse_path_from_str("hello")).is_err());
-    let dir1 = fs.read_dir(PathBuf::parse_path_from_str("dir1"));
+    assert!(
+        fs.read_dir(PathBuf::parse_path_from_user_str("hello"))
+            .is_err()
+    );
+    let dir1 = fs.read_dir(PathBuf::parse_path_from_user_str("dir1"));
     assert!(dir1.is_ok());
     let dir1_contents = dir1.unwrap().map(debugify_error).collect::<Vec<_>>();
     assert_eq!(
@@ -329,28 +336,32 @@ fn test_traverse() {
 fn test_is_file() {
     type PathBuf = <TestFs as Fs>::PathBuf;
     let fs = test_hierarchy();
-    assert!(fs.is_file(PathBuf::parse_path_from_str("base_file")));
-    assert!(fs.is_file(PathBuf::parse_path_from_str("config.tm2.toml")));
-    assert!(fs.is_file(PathBuf::parse_path_from_str("example_album/music.tm2.toml")));
-    assert!(fs.is_file(PathBuf::parse_path_from_str("example_album/song1.mp3")));
+    assert!(fs.is_file(PathBuf::parse_path_from_user_str("base_file")));
+    assert!(fs.is_file(PathBuf::parse_path_from_user_str("config.tm2.toml")));
+    assert!(fs.is_file(PathBuf::parse_path_from_user_str(
+        "example_album/music.tm2.toml"
+    )));
+    assert!(fs.is_file(PathBuf::parse_path_from_user_str("example_album/song1.mp3")));
 
-    assert!(!fs.is_file(PathBuf::parse_path_from_str("example_album")));
-    assert!(!fs.is_file(PathBuf::parse_path_from_str("dir1")));
-    assert!(!fs.is_file(PathBuf::parse_path_from_str("dummy I made up")));
+    assert!(!fs.is_file(PathBuf::parse_path_from_user_str("example_album")));
+    assert!(!fs.is_file(PathBuf::parse_path_from_user_str("dir1")));
+    assert!(!fs.is_file(PathBuf::parse_path_from_user_str("dummy I made up")));
 }
 
 #[test]
 fn test_is_dir() {
     type PathBuf = <TestFs as Fs>::PathBuf;
     let fs = test_hierarchy();
-    assert!(fs.is_dir(PathBuf::parse_path_from_str("example_album")));
-    assert!(fs.is_dir(PathBuf::parse_path_from_str("dir1")));
+    assert!(fs.is_dir(PathBuf::parse_path_from_user_str("example_album")));
+    assert!(fs.is_dir(PathBuf::parse_path_from_user_str("dir1")));
 
-    assert!(!fs.is_dir(PathBuf::parse_path_from_str("base_file")));
-    assert!(!fs.is_dir(PathBuf::parse_path_from_str("config.tm2.toml")));
-    assert!(!fs.is_dir(PathBuf::parse_path_from_str("example_album/music.tm2.toml")));
-    assert!(!fs.is_dir(PathBuf::parse_path_from_str("example_album/song1.mp3")));
-    assert!(!fs.is_dir(PathBuf::parse_path_from_str("dummy I made up")));
+    assert!(!fs.is_dir(PathBuf::parse_path_from_user_str("base_file")));
+    assert!(!fs.is_dir(PathBuf::parse_path_from_user_str("config.tm2.toml")));
+    assert!(!fs.is_dir(PathBuf::parse_path_from_user_str(
+        "example_album/music.tm2.toml"
+    )));
+    assert!(!fs.is_dir(PathBuf::parse_path_from_user_str("example_album/song1.mp3")));
+    assert!(!fs.is_dir(PathBuf::parse_path_from_user_str("dummy I made up")));
 }
 
 #[test]
@@ -358,7 +369,7 @@ fn test_config_file() {
     type PathBuf = <TestFs as Fs>::PathBuf;
     let fs = test_hierarchy();
     let file =
-        debugify_error(fs.parse_config_file(PathBuf::parse_path_from_str("config.tm2.toml")));
+        debugify_error(fs.parse_config_file(PathBuf::parse_path_from_user_str("config.tm2.toml")));
     assert_eq!(
         file.map(|(_doc, c)| c),
         Ok(ConfigFile {
@@ -374,9 +385,9 @@ fn test_config_file() {
 fn test_group_file() {
     type PathBuf = <TestFs as Fs>::PathBuf;
     let fs = test_hierarchy();
-    let file = debugify_error(
-        fs.parse_group_file(PathBuf::parse_path_from_str("example_album/music.tm2.toml")),
-    );
+    let file = debugify_error(fs.parse_group_file(PathBuf::parse_path_from_user_str(
+        "example_album/music.tm2.toml",
+    )));
     assert_eq!(
         file.map(|(_doc, g)| g),
         Ok(GroupFile::Album {
@@ -402,7 +413,7 @@ fn test_song_metadata() {
     type PathBuf = <TestFs as Fs>::PathBuf;
     let fs = test_hierarchy();
     let file = debugify_error(
-        fs.parse_native_metadata(PathBuf::parse_path_from_str("example_album/song1.mp3")),
+        fs.parse_native_metadata(PathBuf::parse_path_from_user_str("example_album/song1.mp3")),
     );
     assert_eq!(
         file,
