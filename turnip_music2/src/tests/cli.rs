@@ -962,10 +962,11 @@ mod export {
             ctx.import(
                 &vec![
                     s!("songs/deltarune"),
-                    s!("songs/unpadded"),
-                    s!("songs/zeropadded"),
                     s!("songs/oddfuture"),
                     s!("songs/souvenir"),
+                    // These cases test the behaviour of numbering for no-track and no-disc files
+                    s!("songs/unpadded"),
+                    s!("songs/zeropadded"),
                 ],
                 None,
                 true,
@@ -983,10 +984,37 @@ mod export {
             Ok(export)
         }();
 
+        let export = export.unwrap();
         // TODO first thing to fix: the sanitization process gets rid of the . on file outputs
+
+        // None of the tracks have albums, so
+        assert_eq!(
+            export.m3u8_exports,
+            indexmap::indexmap! {
+                s!("Big Anime Compilation") => (
+                    test_path!("Big Anime Compilation.m3u8"),
+                    vec![
+                        test_path!("Akatsuki Arrival.mp3"),
+                        test_path!("Datte Atashino Hero.mp3"),
+                        test_path!("Ideal White.mp3"),
+                        test_path!("Light in Starless Sky.mp3"),
+                        test_path!("Misc Artistless Song.mp3"),
+                    ]
+                )
+            }
+        );
+
         dbg!(export);
         assert!(false);
     }
+
+    // TODO test compilations under the Album export mode
+    // TODO test the different folder hierarchy modes
+    // TODO test track labelling for multi-disc exports
+    // TODO test songs without albums don't get track labelled exports
+    // TODO check for case-insensitive duplicate warnings
+    // TODO check for charset-based duplicates
+    // TODO check charset renames properly
 }
 
 fn basic_test_hierarchy(songs: TestFs, with_library: bool) -> TestFs {
