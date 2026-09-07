@@ -668,6 +668,13 @@ impl<F: Fs> ExportContext<F> {
         let ext = "mp3";
         metadata.fmt = crate::data_model::native_metadata::NativeMetadataFormat::ID3;
 
+        // Assume that track numbering and extensions will never produce invalid chars in any encoding,
+        // so we can sanitize the title only without worrying about the rest.
+        let sanitized_title = self
+            .config
+            .target_charset
+            .unwrap_or_default()
+            .sanitize(metadata.title.as_ref().unwrap());
         // Apply track numbering
         let filename = match numbering {
             NumberContext::Numbered {
@@ -677,22 +684,22 @@ impl<F: Fs> ExportContext<F> {
                 "{:0disc_digits$}{:0track_digits$} - {}.{}",
                 metadata.disc.unwrap_or_default(),
                 metadata.track.unwrap_or_default(),
-                metadata.title.as_ref().unwrap(),
+                sanitized_title,
                 ext
             ),
             NumberContext::Numbered { track_digits, .. } if track_digits > 0 => format!(
                 "{:0track_digits$} - {}.{}",
                 metadata.track.unwrap_or_default(),
-                metadata.title.as_ref().unwrap(),
+                sanitized_title,
                 ext
             ),
             NumberContext::Numbered { disc_digits, .. } if disc_digits > 0 => format!(
                 "{:0disc_digits$} - {}.{}",
                 metadata.disc.unwrap_or_default(),
-                metadata.title.as_ref().unwrap(),
+                sanitized_title,
                 ext
             ),
-            _ => format!("{}.{}", metadata.title.as_ref().unwrap(), ext),
+            _ => format!("{}.{}", sanitized_title, ext),
         };
 
         let output_dir: &[&str] = match self.config.output_structure {
@@ -727,12 +734,8 @@ impl<F: Fs> ExportContext<F> {
         self.check_duplicate_file(output_dir.clone(), warner);
         self.folders_to_make.insert(output_dir.clone());
 
-        // Handle charsets and deduplication for filename
-        let filename = self
-            .config
-            .target_charset
-            .unwrap_or_default()
-            .sanitize(&filename);
+        // Handle deduplication for filename
+        // Charsets have already been handled before constructing filename
         let output_file = output_dir.joined(&filename);
         self.check_duplicate_file(output_file.clone(), warner);
 
