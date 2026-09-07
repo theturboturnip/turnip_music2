@@ -983,6 +983,7 @@ mod export {
             Ok(export)
         }();
 
+        // TODO first thing to fix: the sanitization process gets rid of the . on file outputs
         dbg!(export);
         assert!(false);
     }
