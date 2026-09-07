@@ -607,6 +607,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
     }
 }
 
+#[derive(Debug)]
 pub struct ExportContext<F: Fs> {
     config: ExportConfig,
 

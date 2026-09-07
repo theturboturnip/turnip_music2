@@ -930,6 +930,64 @@ title = "Misc Artistless Song"
     // TODO TEST FOR FOLDER WITH MULTIPLE FILE TYPES, WHERE WE ONLY WANT ONE
 }
 
+mod export {
+    use super::*;
+    use crate::{
+        cli::{CliContext, Library},
+        data_model::parsed,
+        scanner::Group,
+    };
+
+    #[test]
+    fn dbg_export() {
+        let mut fs = basic_test_hierarchy(
+            test_dir!(
+                (
+                    "Big Anime Compilation",
+                    basic_compilation_embedded_metadata()
+                ), //
+                ("deltarune", deltarune_partial()),         //
+                ("unpadded", basic_unpadded_tracks()),      //
+                ("zeropadded", basic_zero_padded_tracks()), //
+                ("oddfuture", cdrip_oddfuture()),           //
+                ("souvenir", cdrip_souvenir()),             //
+            ),
+            false,
+        );
+        let mut warner = vec![];
+
+        let export = || -> anyhow::Result<_> {
+            let mut ctx = CliContext::new(None, &mut fs, &mut warner);
+            ctx.init(vec![s!("songs")], true)?;
+            ctx.import(
+                &vec![
+                    s!("songs/deltarune"),
+                    s!("songs/unpadded"),
+                    s!("songs/zeropadded"),
+                    s!("songs/oddfuture"),
+                    s!("songs/souvenir"),
+                ],
+                None,
+                true,
+                crate::cli::ImportMode::Album,
+            )?;
+            ctx.import(
+                &vec![s!("songs/Big Anime Compilation")],
+                None,
+                true,
+                crate::cli::ImportMode::Compilation,
+            )?;
+            ctx.reload_library()?;
+            let export = ctx.export("mp3")?;
+
+            Ok(export)
+        }();
+
+        dbg!(export);
+        assert!(false);
+    }
+}
+
 fn basic_test_hierarchy(songs: TestFs, with_library: bool) -> TestFs {
     if with_library {
         test_dir!(
