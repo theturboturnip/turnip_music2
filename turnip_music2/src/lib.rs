@@ -5,6 +5,7 @@
 /// CLI-facing modules, agnostic to filesystem and warning mechanisms
 pub mod cli;
 pub mod data_model;
+pub mod export;
 pub mod fs;
 pub mod resolver;
 pub mod scanner;

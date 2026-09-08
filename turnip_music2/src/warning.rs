@@ -40,6 +40,7 @@ pub enum Warning<PathBuf: Clone + PartialEq + Eq> {
     },
 }
 
+/// TODO rename Warner
 pub trait WarningSender<PathBuf: Clone + PartialEq + Eq> {
     fn warn(&mut self, w: Warning<PathBuf>);
 }
