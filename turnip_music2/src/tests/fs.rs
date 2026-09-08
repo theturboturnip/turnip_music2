@@ -1,7 +1,7 @@
 use crate::{
     data_model::{
         Chromaprint,
-        native_metadata::{NativeMetadata, NativeMetadataFormat},
+        native_metadata::{NativeMetadata, NativeMetadataFormat, NativeMusicExt},
         user_defined::{self, ConfigFile, ConfigFileInputs, GroupFile, Origin},
     },
     fs::{Fs, FsPathBuf},
@@ -199,9 +199,25 @@ impl Fs for TestFs {
     fn parse_native_metadata<P: AsRef<Self::Path>>(
         &self,
         path: P,
-    ) -> anyhow::Result<NativeMetadata> {
-        match self.traverse(path)? {
-            TestFs::MusicFile(native, _) => Ok(native.clone()),
+    ) -> anyhow::Result<(Option<NativeMusicExt>, NativeMetadata)> {
+        let file_ext: Option<NativeMusicExt> = self
+            .path_ext(path.as_ref())
+            .map(|e| e.to_str())
+            .flatten()
+            .map(|e| e.parse().ok())
+            .flatten();
+        match self.traverse(path.as_ref())? {
+            TestFs::MusicFile(native, _) => {
+                assert_eq!(
+                    native.fmt,
+                    file_ext
+                        .map(|e| e.into())
+                        .unwrap_or(NativeMetadataFormat::None),
+                    "Mismatching file metadata for {:?} based on extension",
+                    path.as_ref()
+                );
+                Ok((file_ext, native.clone()))
+            }
             _ => bail!("not a music file, no metadata found"),
         }
     }
@@ -292,7 +308,7 @@ title="song1"
                     "song1.mp3",
                     TestFs::MusicFile(
                         NativeMetadata {
-                            fmt: NativeMetadataFormat::ID3,
+                            fmt: NativeMetadataFormat::Id3,
                             title: Some(s!("song1-mp3meta")),
                             album: None,
                             album_artists: vec![],
@@ -421,17 +437,20 @@ fn test_song_metadata() {
     );
     assert_eq!(
         file,
-        Ok(NativeMetadata {
-            fmt: NativeMetadataFormat::ID3,
-            title: Some("song1-mp3meta".to_owned()),
-            album: None,
-            album_artists: vec![],
-            artists: vec![],
-            num_discs: None,
-            disc: None,
-            num_tracks: None,
-            track: None,
-            genres: vec![],
-        })
+        Ok((
+            Some(NativeMusicExt::Mp3),
+            NativeMetadata {
+                fmt: NativeMetadataFormat::Id3,
+                title: Some("song1-mp3meta".to_owned()),
+                album: None,
+                album_artists: vec![],
+                artists: vec![],
+                num_discs: None,
+                disc: None,
+                num_tracks: None,
+                track: None,
+                genres: vec![],
+            }
+        ))
     );
 }

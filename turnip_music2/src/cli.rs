@@ -1,11 +1,11 @@
 use std::{
     collections::{HashMap, HashSet},
-    ffi::OsStr,
+    ffi::{OsStr, OsString},
 };
 
 use crate::{
     data_model::{
-        native_metadata::NativeMetadata,
+        native_metadata::{NativeMetadata, NativeMusicExt},
         parsed,
         user_defined::{self, CompilationMode::AsM3u8, ConfigFile, ConfigFileInputs, ExportConfig},
     },
@@ -132,7 +132,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                 Some(indexmap::indexmap! {
                     "mp3".to_string() => ExportConfig {
                         output_path:"output".to_string(),
-                        target_format:vec!["mp3".to_string()],
+                        target_format:vec![NativeMusicExt::Mp3],
                         reencode_params:None,
                         target_bitrate:Some(128),
                         max_bitrate:Some(320),
@@ -207,8 +207,22 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                     .to_str()
                     .ok_or_else(|| anyhow!("Song file path '{:?}' was not valid Unicode", song))?;
 
+                // TODO this snippet shouldn't be repeated everywhere...
+                let music_ext = self
+                    .fs
+                    .path_ext(song.as_ref())
+                    .map(|e| e.to_str())
+                    .flatten()
+                    .map(|e| e.parse().ok())
+                    .flatten()
+                    .ok_or_else(|| {
+                        anyhow!("Song file path '{:?}' is not a recognized music file", song)
+                    })?;
+
                 let meta = if inherit_native_metadata {
-                    self.fs.parse_native_metadata(song.as_ref())?
+                    let (music_ext2, meta) = self.fs.parse_native_metadata(song.as_ref())?;
+                    assert_eq!(music_ext2, Some(music_ext));
+                    meta
                 } else {
                     NativeMetadata::default()
                 };
@@ -505,8 +519,8 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                     files,
                 } => {
                     // Gather exported songs
-                    for f in files.iter() {
-                        to_export.push((f.0.as_ref(), f.1.clone().into(), None));
+                    for (path, ext, meta) in files.iter() {
+                        to_export.push((path.as_ref(), *ext, meta.clone().into(), None));
                         // , self.warner);
                     }
                 }
@@ -524,12 +538,12 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                             // Check the length fits into u64. This is literally never going to not happen.
                             let _len_u64: u64 = files.len().try_into().map_err(|_e| anyhow!("Compilation '{compilation_title}' has more songs than fit into a u64. This will never happen."))?;
 
-                            for (track, f) in files.iter().enumerate() {
-                                to_export.push((f.0.as_ref(), NativeMetadata {
+                            for (track, (path, ext, meta)) in files.iter().enumerate() {
+                                to_export.push((path.as_ref(), *ext, NativeMetadata {
                                         fmt: crate::data_model::native_metadata::NativeMetadataFormat::None,
-                                        title: Some(f.1.title.clone()),
-                                        artists: f.1.artists.clone(),
-                                        genres: f.1.genres.clone(),
+                                        title: Some(meta.title.clone()),
+                                        artists: meta.artists.clone(),
+                                        genres: meta.genres.clone(),
                                         album: Some(album.clone()),
                                         album_artists: album_artists.clone(),
                                         num_discs: None,
@@ -543,10 +557,11 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                         // Export songs as normal
                         user_defined::CompilationMode::AsM3u8
                         | user_defined::CompilationMode::Disabled => {
-                            for f in files.iter() {
+                            for (path, ext, meta) in files.iter() {
                                 to_export.push((
-                                    f.0.as_ref(),
-                                    f.1.clone().into(),
+                                    path.as_ref(),
+                                    *ext,
+                                    meta.clone().into(),
                                     Some(compilation_title.as_str()),
                                     // self.warner,
                                 ));
@@ -573,7 +588,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
             // TODO COWs?
             let mut disc_digits: HashMap<String, usize> = HashMap::new();
             let mut track_digits: HashMap<String, usize> = HashMap::new();
-            for (_path, f, _comp) in to_export.iter() {
+            for (_path, _ext, f, _comp) in to_export.iter() {
                 if let Some(album) = f.album.as_ref() {
                     let d = std::cmp::max(digits(f.num_discs), digits(f.disc));
                     let t = std::cmp::max(digits(f.num_tracks), digits(f.track));
@@ -591,7 +606,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
             (disc_digits, track_digits)
         };
 
-        for (input_file, metadata, in_compilation) in to_export {
+        for (input_file, ext, metadata, in_compilation) in to_export {
             let numbering = match metadata.album.as_ref() {
                 Some(a) => NumberContext::Numbered {
                     disc_digits: *disc_digits.get(a).unwrap(),
@@ -600,12 +615,23 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                 None => NumberContext::NoNumbering,
             };
 
-            exports.add_song(input_file, metadata, numbering, in_compilation, self.warner);
+            exports.add_song(
+                input_file,
+                ext,
+                metadata,
+                numbering,
+                in_compilation,
+                self.warner,
+            );
         }
 
         Ok(exports)
     }
 }
+
+/// ffmpeg command line args, effectively
+/// OsString for passing into
+pub struct ExportJob(Vec<OsString>);
 
 #[derive(Debug)]
 pub struct ExportContext<F: Fs> {
@@ -613,8 +639,14 @@ pub struct ExportContext<F: Fs> {
 
     /// lib-relative output paths to create
     pub folders_to_make: HashSet<F::PathBuf>,
-    /// lib-relative input_path, metadata, lib-relative output_path
-    pub song_exports: Vec<(F::PathBuf, NativeMetadata, F::PathBuf)>,
+    /// lib-relative input_path, inputlib-relative output_path, outputoutput metadata
+    pub song_exports: Vec<(
+        F::PathBuf,
+        NativeMusicExt,
+        F::PathBuf,
+        NativeMusicExt,
+        NativeMetadata,
+    )>,
     /// title -> (m3u8_path, lib-relative song_paths)
     pub m3u8_exports: IndexMap<String, (F::PathBuf, Vec<F::PathBuf>)>,
     all_outputs: HashSet<F::PathBuf>,
@@ -659,14 +691,20 @@ impl<F: Fs> ExportContext<F> {
     fn add_song<W: WarningSender<F::PathBuf>>(
         &mut self,
         input_file: &F::Path,
+        input_ext: NativeMusicExt,
         mut metadata: NativeMetadata,
         numbering: NumberContext,
         in_compilation: Option<&str>,
         warner: &mut W,
     ) {
-        // TODO code for figuring out the target format
-        let ext = "mp3";
-        metadata.fmt = crate::data_model::native_metadata::NativeMetadataFormat::ID3;
+        // Figure out the target format
+        // TODO apply bitrate detection, pack into a Transform{} struct (inputoutputreencode_if_equal) which handles the case of e.g. a too-high bitrate mp3->mp3
+        let output_ext = if self.config.target_format.contains(&input_ext) {
+            input_ext
+        } else {
+            self.config.target_format[0]
+        };
+        metadata.fmt = output_ext.into();
 
         // Assume that track numbering and extensions will never produce invalid chars in any encoding,
         // so we can sanitize the title only without worrying about the rest.
@@ -685,21 +723,21 @@ impl<F: Fs> ExportContext<F> {
                 metadata.disc.unwrap_or_default(),
                 metadata.track.unwrap_or_default(),
                 sanitized_title,
-                ext
+                output_ext.to_str(),
             ),
             NumberContext::Numbered { track_digits, .. } if track_digits > 0 => format!(
                 "{:0track_digits$} - {}.{}",
                 metadata.track.unwrap_or_default(),
                 sanitized_title,
-                ext
+                output_ext.to_str(),
             ),
             NumberContext::Numbered { disc_digits, .. } if disc_digits > 0 => format!(
                 "{:0disc_digits$} - {}.{}",
                 metadata.disc.unwrap_or_default(),
                 sanitized_title,
-                ext
+                output_ext.to_str(),
             ),
-            _ => format!("{}.{}", sanitized_title, ext),
+            _ => format!("{}.{}", sanitized_title, output_ext.to_str(),),
         };
 
         let output_dir: &[&str] = match self.config.output_structure {
@@ -756,8 +794,13 @@ impl<F: Fs> ExportContext<F> {
             }
         }
 
-        self.song_exports
-            .push((input_file.to_owned(), metadata, output_file));
+        self.song_exports.push((
+            input_file.to_owned(),
+            input_ext,
+            output_file,
+            output_ext,
+            metadata,
+        ));
     }
 }
 

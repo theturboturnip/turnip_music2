@@ -82,15 +82,20 @@ pub fn scan_library<F: Fs, W: WarningSender<F::PathBuf>>(
     }
 
     // TODO par_iter here?
-    Ok(groups
+    groups
         .into_iter()
-        .map(|(toml_path, group_doc, group_struct)| Group {
-            doc: group_doc,
-            parsed: parsed::GroupFile::from_user(
-                fs.path_parent_dir(toml_path.as_ref()).unwrap().as_ref(),
-                group_struct,
-            ),
-            toml_path,
-        })
-        .collect::<Vec<_>>())
+        .map(
+            |(toml_path, group_doc, group_struct)| -> Result<Group<F>, _> {
+                Ok(Group {
+                    doc: group_doc,
+                    parsed: parsed::GroupFile::from_user(
+                        fs,
+                        fs.path_parent_dir(toml_path.as_ref()).unwrap().as_ref(),
+                        group_struct,
+                    )?,
+                    toml_path,
+                })
+            },
+        )
+        .collect::<Result<Vec<_>, _>>()
 }

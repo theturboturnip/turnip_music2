@@ -241,7 +241,7 @@ title = "Track 4"
             } if actual == &vec![
                 (
                     test_path!("songs", "oddfuture", "track01.flac"),
-                    parsed::AlbumFileMeta {
+                    NativeMusicExt::Flac, parsed::AlbumFileMeta {
                         title: s!("ODD FUTURE"),
                         artists: vec![s!("UVERworld")],
                         genres: vec![],
@@ -255,7 +255,7 @@ title = "Track 4"
                 ),
                 (
                     test_path!("songs", "oddfuture", "track02.flac"),
-                    parsed::AlbumFileMeta {
+                    NativeMusicExt::Flac, parsed::AlbumFileMeta {
                         title: s!("PLOT"),
                         artists: vec![s!("UVERworld")],
                         genres: vec![],
@@ -269,7 +269,7 @@ title = "Track 4"
                 ),
                 (
                     test_path!("songs", "oddfuture", "track03.flac"),
-                    parsed::AlbumFileMeta {
+                    NativeMusicExt::Flac, parsed::AlbumFileMeta {
                         title: s!("CORE STREAM"),
                         artists: vec![s!("UVERworld")],
                         genres: vec![],
@@ -297,7 +297,7 @@ title = "Track 4"
             } if actual == &vec![
                 (
                     test_path!("songs", "souvenir", "track01.flac"),
-                    parsed::AlbumFileMeta {
+                    NativeMusicExt::Flac, parsed::AlbumFileMeta {
                         title: s!("SOUVENIR"),
                         artists: vec![s!("BUMP OF CHICKEN")],
                         genres: vec![],
@@ -311,7 +311,7 @@ title = "Track 4"
                 ),
                 (
                     test_path!("songs", "souvenir", "track02.flac"),
-                    parsed::AlbumFileMeta {
+                    NativeMusicExt::Flac, parsed::AlbumFileMeta {
                         title: s!("クロノスタシス"),
                         artists: vec![s!("BUMP OF CHICKEN")],
                         genres: vec![],
@@ -325,7 +325,7 @@ title = "Track 4"
                 ),
                 (
                     test_path!("songs", "souvenir", "track03.flac"),
-                    parsed::AlbumFileMeta {
+                    NativeMusicExt::Flac, parsed::AlbumFileMeta {
                         title: s!("窓の中から"),
                         artists: vec![s!("BUMP OF CHICKEN")],
                         genres: vec![],
@@ -339,7 +339,7 @@ title = "Track 4"
                 ),
                 (
                     test_path!("songs", "souvenir", "track04.flac"),
-                    parsed::AlbumFileMeta {
+                    NativeMusicExt::Flac, parsed::AlbumFileMeta {
                         title: s!("Track 4"),
                         artists: vec![s!("BUMP OF CHICKEN")],
                         genres: vec![],
@@ -447,7 +447,7 @@ title = "11-Fish to the Twenty-First Order"
             } if actual == &vec![
                 (
                     test_path!("songs", "unpadded", "1-The Biggest Fish.wav"),
-                    parsed::AlbumFileMeta {
+                    NativeMusicExt::Wav, parsed::AlbumFileMeta {
                         title: s!("1-The Biggest Fish"),
                         artists: vec![],
                         genres: vec![],
@@ -461,7 +461,7 @@ title = "11-Fish to the Twenty-First Order"
                 ),
                 (
                     test_path!("songs", "unpadded", "2-The Next Biggest Fish.wav"),
-                    parsed::AlbumFileMeta {
+                    NativeMusicExt::Wav, parsed::AlbumFileMeta {
                         title: s!("2-The Next Biggest Fish"),
                         artists: vec![],
                         genres: vec![],
@@ -475,7 +475,7 @@ title = "11-Fish to the Twenty-First Order"
                 ),
                 (
                     test_path!("songs", "unpadded", "11-Fish to the Twenty-First Order.wav"),
-                    parsed::AlbumFileMeta {
+                    NativeMusicExt::Wav, parsed::AlbumFileMeta {
                         title: s!("11-Fish to the Twenty-First Order"),
                         artists: vec![],
                         genres: vec![],
@@ -503,7 +503,7 @@ title = "11-Fish to the Twenty-First Order"
             } if actual == &vec![
                 (
                     test_path!("songs", "zeropadded", "01-The Biggest Fish.wav"),
-                    parsed::AlbumFileMeta {
+                    NativeMusicExt::Wav, parsed::AlbumFileMeta {
                         title: s!("01-The Biggest Fish"),
                         artists: vec![],
                         genres: vec![],
@@ -517,7 +517,7 @@ title = "11-Fish to the Twenty-First Order"
                 ),
                 (
                     test_path!("songs", "zeropadded", "02-The Next Biggest Fish.wav"),
-                    parsed::AlbumFileMeta {
+                    NativeMusicExt::Wav, parsed::AlbumFileMeta {
                         title: s!("02-The Next Biggest Fish"),
                         artists: vec![],
                         genres: vec![],
@@ -531,7 +531,7 @@ title = "11-Fish to the Twenty-First Order"
                 ),
                 (
                     test_path!("songs", "zeropadded", "11-Fish to the Twenty-First Order.wav"),
-                    parsed::AlbumFileMeta {
+                    NativeMusicExt::Wav, parsed::AlbumFileMeta {
                         title: s!("11-Fish to the Twenty-First Order"),
                         artists: vec![],
                         genres: vec![],
@@ -619,7 +619,7 @@ track = 39
             } if actual == &vec![
                 (
                     test_path!("songs", "deltarune", "Toby Fox - DELTARUNE Chapter 1 OST - 01 ANOTHER HIM.mp3"),
-                    parsed::AlbumFileMeta {
+                    NativeMusicExt::Mp3, parsed::AlbumFileMeta {
                         title: s!("ANOTHER HIM"),
                         artists: vec![s!("Toby Fox")],
                         genres: vec![],
@@ -633,7 +633,7 @@ track = 39
                 ),
                 (
                     test_path!("songs", "deltarune", "Toby Fox - DELTARUNE Chapter 1 OST - 02 Beginning.mp3"),
-                    parsed::AlbumFileMeta {
+                    NativeMusicExt::Mp3, parsed::AlbumFileMeta {
                         title: s!("Beginning"),
                         artists: vec![s!("Toby Fox")],
                         genres: vec![],
@@ -647,7 +647,7 @@ track = 39
                 ),
                 (
                     test_path!("songs", "deltarune", "Laura Shigihara - DELTARUNE Chapter 1 OST - 39 Don't Forget.mp3"),
-                    parsed::AlbumFileMeta {
+                    NativeMusicExt::Mp3, parsed::AlbumFileMeta {
                         title: s!("Don't Forget"),
                         artists: vec![s!("Laura Shigihara")],
                         genres: vec![],
@@ -729,7 +729,7 @@ title = "Toby Fox - DELTARUNE Chapter 1 OST - 02 Beginning"
             } if actual == &vec![
                 (
                     test_path!("songs", "deltarune", "Laura Shigihara - DELTARUNE Chapter 1 OST - 39 Don't Forget.mp3"),
-                    parsed::AlbumFileMeta {
+                    NativeMusicExt::Mp3, parsed::AlbumFileMeta {
                         title: s!("Laura Shigihara - DELTARUNE Chapter 1 OST - 39 Don't Forget"),
                         artists: vec![],
                         genres: vec![],
@@ -743,7 +743,7 @@ title = "Toby Fox - DELTARUNE Chapter 1 OST - 02 Beginning"
                 ),
                 (
                     test_path!("songs", "deltarune", "Toby Fox - DELTARUNE Chapter 1 OST - 01 ANOTHER HIM.mp3"),
-                    parsed::AlbumFileMeta {
+                    NativeMusicExt::Mp3, parsed::AlbumFileMeta {
                         title: s!("Toby Fox - DELTARUNE Chapter 1 OST - 01 ANOTHER HIM"),
                         artists: vec![],
                         genres: vec![],
@@ -757,7 +757,7 @@ title = "Toby Fox - DELTARUNE Chapter 1 OST - 02 Beginning"
                 ),
                 (
                     test_path!("songs", "deltarune", "Toby Fox - DELTARUNE Chapter 1 OST - 02 Beginning.mp3"),
-                    parsed::AlbumFileMeta {
+                    NativeMusicExt::Mp3, parsed::AlbumFileMeta {
                         title: s!("Toby Fox - DELTARUNE Chapter 1 OST - 02 Beginning"),
                         artists: vec![],
                         genres: vec![],
@@ -854,7 +854,7 @@ title = "Misc Artistless Song"
             } if actual == &vec![
                 (
                     test_path!("songs", "Big Anime Compilation", "Akatsuki Arrival.mp3"),
-                    parsed::CompilationFileMeta {
+                    NativeMusicExt::Mp3, parsed::CompilationFileMeta {
                         title: s!("Akatsuki Arrival"),
                         artists: vec![s!("Hatsune Miku"), s!("Megurine Luka")],
                         genres: vec![],
@@ -868,7 +868,7 @@ title = "Misc Artistless Song"
                 ),
                 (
                     test_path!("songs", "Big Anime Compilation", "Datte Atashino Hero.mp3"),
-                    parsed::CompilationFileMeta {
+                    NativeMusicExt::Mp3, parsed::CompilationFileMeta {
                         title: s!("Datte Atashino Hero"),
                         artists: vec![s!("LiSA")],
                         genres: vec![],
@@ -882,7 +882,7 @@ title = "Misc Artistless Song"
                 ),
                 (
                     test_path!("songs", "Big Anime Compilation", "Ideal White.mp3"),
-                    parsed::CompilationFileMeta {
+                    NativeMusicExt::Mp3, parsed::CompilationFileMeta {
                         title: s!("Ideal White"),
                         artists: vec![s!("Mashiro Ayano")],
                         genres: vec![],
@@ -896,7 +896,7 @@ title = "Misc Artistless Song"
                 ),
                 (
                     test_path!("songs", "Big Anime Compilation", "Light in Starless Sky.mp3"),
-                    parsed::CompilationFileMeta {
+                    NativeMusicExt::Mp3, parsed::CompilationFileMeta {
                         title: s!("Light in Starless Sky"),
                         artists: vec![s!("Lotus Juice")],
                         genres: vec![],
@@ -910,7 +910,7 @@ title = "Misc Artistless Song"
                 ),
                 (
                     test_path!("songs", "Big Anime Compilation", "Misc Artistless Song.mp3"),
-                    parsed::CompilationFileMeta {
+                    NativeMusicExt::Mp3, parsed::CompilationFileMeta {
                         title: s!("Misc Artistless Song"),
                         artists: vec![],
                         genres: vec![],
@@ -1041,7 +1041,7 @@ fn cdrip_oddfuture() -> TestFs {
             "track01.flac",
             TestFs::MusicFile(
                 NativeMetadata {
-                    fmt: NativeMetadataFormat::FLAC,
+                    fmt: NativeMetadataFormat::Flac,
                     title: Some(s!("ODD FUTURE")),
                     album: Some(s!("ODD FUTURE")),
                     album_artists: vec![],
@@ -1059,7 +1059,7 @@ fn cdrip_oddfuture() -> TestFs {
             "track02.flac",
             TestFs::MusicFile(
                 NativeMetadata {
-                    fmt: NativeMetadataFormat::FLAC,
+                    fmt: NativeMetadataFormat::Flac,
                     title: Some(s!("PLOT")),
                     album: Some(s!("ODD FUTURE")),
                     album_artists: vec![],
@@ -1077,7 +1077,7 @@ fn cdrip_oddfuture() -> TestFs {
             "track03.flac",
             TestFs::MusicFile(
                 NativeMetadata {
-                    fmt: NativeMetadataFormat::FLAC,
+                    fmt: NativeMetadataFormat::Flac,
                     title: Some(s!("CORE STREAM")),
                     album: Some(s!("ODD FUTURE")),
                     album_artists: vec![],
@@ -1101,7 +1101,7 @@ fn cdrip_souvenir() -> TestFs {
             "track01.flac",
             TestFs::MusicFile(
                 NativeMetadata {
-                    fmt: NativeMetadataFormat::FLAC,
+                    fmt: NativeMetadataFormat::Flac,
                     title: Some(s!("SOUVENIR")),
                     album: Some(s!("SOUVENIR")),
                     album_artists: vec![],
@@ -1119,7 +1119,7 @@ fn cdrip_souvenir() -> TestFs {
             "track02.flac",
             TestFs::MusicFile(
                 NativeMetadata {
-                    fmt: NativeMetadataFormat::FLAC,
+                    fmt: NativeMetadataFormat::Flac,
                     title: Some(s!("クロノスタシス")),
                     album: Some(s!("SOUVENIR")),
                     album_artists: vec![],
@@ -1137,7 +1137,7 @@ fn cdrip_souvenir() -> TestFs {
             "track03.flac",
             TestFs::MusicFile(
                 NativeMetadata {
-                    fmt: NativeMetadataFormat::FLAC,
+                    fmt: NativeMetadataFormat::Flac,
                     title: Some(s!("窓の中から")),
                     album: Some(s!("SOUVENIR")),
                     album_artists: vec![],
@@ -1155,7 +1155,7 @@ fn cdrip_souvenir() -> TestFs {
             "track04.flac",
             TestFs::MusicFile(
                 NativeMetadata {
-                    fmt: NativeMetadataFormat::FLAC,
+                    fmt: NativeMetadataFormat::Flac,
                     title: Some(s!("Track 4")),
                     album: Some(s!("SOUVENIR")),
                     album_artists: vec![],
@@ -1180,7 +1180,7 @@ fn deltarune_partial() -> TestFs {
             "Laura Shigihara - DELTARUNE Chapter 1 OST - 39 Don't Forget.mp3",
             TestFs::MusicFile(
                 NativeMetadata {
-                    fmt: NativeMetadataFormat::FLAC,
+                    fmt: NativeMetadataFormat::Id3,
                     title: Some(s!("Don't Forget")),
                     album: Some(s!("DELTARUNE Chapter 1 OST")),
                     album_artists: vec![s!("Toby Fox")],
@@ -1198,7 +1198,7 @@ fn deltarune_partial() -> TestFs {
             "Toby Fox - DELTARUNE Chapter 1 OST - 01 ANOTHER HIM.mp3",
             TestFs::MusicFile(
                 NativeMetadata {
-                    fmt: NativeMetadataFormat::FLAC,
+                    fmt: NativeMetadataFormat::Id3,
                     title: Some(s!("ANOTHER HIM")),
                     album: Some(s!("DELTARUNE Chapter 1 OST")),
                     album_artists: vec![s!("Toby Fox")],
@@ -1216,7 +1216,7 @@ fn deltarune_partial() -> TestFs {
             "Toby Fox - DELTARUNE Chapter 1 OST - 02 Beginning.mp3",
             TestFs::MusicFile(
                 NativeMetadata {
-                    fmt: NativeMetadataFormat::FLAC,
+                    fmt: NativeMetadataFormat::Id3,
                     title: Some(s!("Beginning")),
                     album: Some(s!("DELTARUNE Chapter 1 OST")),
                     album_artists: vec![s!("Toby Fox")],
@@ -1237,15 +1237,33 @@ fn basic_zero_padded_tracks() -> TestFs {
     test_dir!(
         (
             "01-The Biggest Fish.wav",
-            TestFs::MusicFile(NativeMetadata::default(), None)
+            TestFs::MusicFile(
+                NativeMetadata {
+                    fmt: NativeMetadataFormat::Id3,
+                    ..Default::default()
+                },
+                None
+            )
         ),
         (
             "02-The Next Biggest Fish.wav",
-            TestFs::MusicFile(NativeMetadata::default(), None)
+            TestFs::MusicFile(
+                NativeMetadata {
+                    fmt: NativeMetadataFormat::Id3,
+                    ..Default::default()
+                },
+                None
+            )
         ),
         (
             "11-Fish to the Twenty-First Order.wav",
-            TestFs::MusicFile(NativeMetadata::default(), None)
+            TestFs::MusicFile(
+                NativeMetadata {
+                    fmt: NativeMetadataFormat::Id3,
+                    ..Default::default()
+                },
+                None
+            )
         ),
     )
 }
@@ -1254,15 +1272,33 @@ fn basic_unpadded_tracks() -> TestFs {
     test_dir!(
         (
             "1-The Biggest Fish.wav",
-            TestFs::MusicFile(NativeMetadata::default(), None)
+            TestFs::MusicFile(
+                NativeMetadata {
+                    fmt: NativeMetadataFormat::Id3,
+                    ..Default::default()
+                },
+                None
+            )
         ),
         (
             "2-The Next Biggest Fish.wav",
-            TestFs::MusicFile(NativeMetadata::default(), None)
+            TestFs::MusicFile(
+                NativeMetadata {
+                    fmt: NativeMetadataFormat::Id3,
+                    ..Default::default()
+                },
+                None
+            )
         ),
         (
             "11-Fish to the Twenty-First Order.wav",
-            TestFs::MusicFile(NativeMetadata::default(), None)
+            TestFs::MusicFile(
+                NativeMetadata {
+                    fmt: NativeMetadataFormat::Id3,
+                    ..Default::default()
+                },
+                None
+            )
         ),
     )
 }
@@ -1273,7 +1309,7 @@ fn basic_compilation_embedded_metadata() -> TestFs {
             "Ideal White.mp3",
             TestFs::MusicFile(
                 NativeMetadata {
-                    fmt: NativeMetadataFormat::ID3,
+                    fmt: NativeMetadataFormat::Id3,
                     title: Some(s!("Ideal White")),
                     album: None,
                     album_artists: vec![],
@@ -1291,7 +1327,7 @@ fn basic_compilation_embedded_metadata() -> TestFs {
             "Datte Atashino Hero.mp3",
             TestFs::MusicFile(
                 NativeMetadata {
-                    fmt: NativeMetadataFormat::ID3,
+                    fmt: NativeMetadataFormat::Id3,
                     title: Some(s!("Datte Atashino Hero")),
                     album: None,
                     album_artists: vec![],
@@ -1309,7 +1345,7 @@ fn basic_compilation_embedded_metadata() -> TestFs {
             "Akatsuki Arrival.mp3",
             TestFs::MusicFile(
                 NativeMetadata {
-                    fmt: NativeMetadataFormat::ID3,
+                    fmt: NativeMetadataFormat::Id3,
                     title: Some(s!("Akatsuki Arrival")),
                     album: None,
                     album_artists: vec![],
@@ -1327,7 +1363,7 @@ fn basic_compilation_embedded_metadata() -> TestFs {
             "Light in Starless Sky.mp3",
             TestFs::MusicFile(
                 NativeMetadata {
-                    fmt: NativeMetadataFormat::ID3,
+                    fmt: NativeMetadataFormat::Id3,
                     title: Some(s!("Light in Starless Sky")),
                     album: None,
                     album_artists: vec![],
@@ -1343,7 +1379,13 @@ fn basic_compilation_embedded_metadata() -> TestFs {
         ),
         (
             "Misc Artistless Song.mp3",
-            TestFs::MusicFile(NativeMetadata::default(), None)
+            TestFs::MusicFile(
+                NativeMetadata {
+                    fmt: NativeMetadataFormat::Id3,
+                    ..Default::default()
+                },
+                None
+            )
         ),
     )
 }

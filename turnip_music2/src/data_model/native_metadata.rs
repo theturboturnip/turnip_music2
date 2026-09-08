@@ -1,21 +1,76 @@
-use std::path::Path;
+use std::{path::Path, str::FromStr};
 
 use id3::TagLike;
 use mp4ameta::ChplTimescale;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NativeMetadataFormat {
-    None,
-    ID3,
-    M4A,
-    FLAC,
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum NativeMusicExt {
+    Mp3,
+    Wav,
+    Aiff,
+    M4a,
+    Flac,
+    Ogg,
+    // TODO m4b support one day? requires general splitting-big-file support.
+}
+impl NativeMusicExt {
+    pub fn to_str(self) -> &'static str {
+        self.into()
+    }
+}
+// TODO completeness tests on FromStr and .into() str
+impl FromStr for NativeMusicExt {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "mp3" => Ok(Self::Mp3),
+            "wav" => Ok(Self::Wav),
+            "aiff" => Ok(Self::Aiff),
+            "m4a" => Ok(Self::M4a),
+            "flac" => Ok(Self::Flac),
+            "ogg" => Ok(Self::Ogg),
+            _ => Err(()),
+        }
+    }
+}
+impl From<NativeMusicExt> for &'static str {
+    fn from(value: NativeMusicExt) -> Self {
+        match value {
+            NativeMusicExt::Mp3 => "mp3",
+            NativeMusicExt::Ogg => "ogg",
+            NativeMusicExt::Flac => "flag",
+            NativeMusicExt::Wav => "wav",
+            NativeMusicExt::Aiff => "aiff",
+            NativeMusicExt::M4a => "m4a",
+        }
+    }
+}
+impl From<NativeMusicExt> for NativeMetadataFormat {
+    fn from(value: NativeMusicExt) -> Self {
+        match value {
+            NativeMusicExt::Mp3 | NativeMusicExt::Wav | NativeMusicExt::Aiff => {
+                NativeMetadataFormat::Id3
+            }
+            NativeMusicExt::Ogg => NativeMetadataFormat::None,
+            NativeMusicExt::Flac => NativeMetadataFormat::Flac,
+            NativeMusicExt::M4a => NativeMetadataFormat::M4a,
+        }
+    }
 }
 
-pub const NATIVE_MUSIC_EXTS: [&'static str; 6] = [
-    "mp3", "ogg", "flac", "wav", "aiff",
-    "m4a",
-    // TODO m4b support one day? requires general splitting-big-file support.
-];
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum NativeMetadataFormat {
+    #[default]
+    None,
+    Id3,
+    M4a,
+    Flac,
+}
+
+pub const NATIVE_MUSIC_EXTS: [&'static str; 6] = ["mp3", "ogg", "flac", "wav", "aiff", "m4a"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NativeMetadata {
@@ -49,30 +104,23 @@ impl Default for NativeMetadata {
 }
 
 impl NativeMetadataFormat {
-    pub fn parse_from_file(path: &Path) -> anyhow::Result<NativeMetadata> {
+    pub fn parse_from_file(
+        path: &Path,
+    ) -> anyhow::Result<(Option<NativeMusicExt>, NativeMetadata)> {
         // TODO more robust detection could use e.g. Symphonia
+        let ext: Option<NativeMusicExt> = path
+            .extension()
+            .map(|e| e.to_str())
+            .flatten()
+            .map(|e| e.parse().ok())
+            .flatten();
+        let fmt = ext.map(|e| e.into()).unwrap_or(NativeMetadataFormat::None);
 
-        let fmt = {
-            let ext = path.extension();
-            match ext {
-                Some(s)
-                    if s.eq_ignore_ascii_case("mp3")
-                        || s.eq_ignore_ascii_case("wav")
-                        || s.eq_ignore_ascii_case("aiff") =>
-                {
-                    NativeMetadataFormat::ID3
-                }
-                Some(s) if s.eq_ignore_ascii_case("flac") => NativeMetadataFormat::FLAC,
-                Some(s) if s.eq_ignore_ascii_case("m4a") => NativeMetadataFormat::M4A,
-                _ => NativeMetadataFormat::None,
-            }
-        };
-
-        match fmt {
-            NativeMetadataFormat::None => Ok(NativeMetadata::default()),
-            NativeMetadataFormat::ID3 => {
+        let meta = match fmt {
+            NativeMetadataFormat::None => NativeMetadata::default(),
+            NativeMetadataFormat::Id3 => {
                 let tag = id3::Tag::read_from_path(&path)?;
-                Ok(NativeMetadata {
+                NativeMetadata {
                     fmt,
                     title: tag.title().map(str::to_string),
                     album: tag.album().map(str::to_string),
@@ -93,9 +141,9 @@ impl NativeMetadataFormat {
                         .into_iter()
                         .map(|s| s.to_string())
                         .collect(),
-                })
+                }
             }
-            NativeMetadataFormat::M4A => {
+            NativeMetadataFormat::M4a => {
                 let mut tag = mp4ameta::Tag::read_with_path(
                     &path,
                     &mp4ameta::ReadConfig {
@@ -107,7 +155,7 @@ impl NativeMetadataFormat {
                         chpl_timescale: ChplTimescale::DEFAULT,
                     },
                 )?;
-                Ok(NativeMetadata {
+                NativeMetadata {
                     fmt,
                     title: tag.take_title(),
                     // TODO take_title_sort_order
@@ -122,9 +170,9 @@ impl NativeMetadataFormat {
                     num_tracks: tag.track().1.map(Into::into),
                     track: tag.track().0.map(Into::into),
                     genres: tag.genres().map(str::to_string).collect(),
-                })
+                }
             }
-            NativeMetadataFormat::FLAC => {
+            NativeMetadataFormat::Flac => {
                 let tag = metaflac::Tag::read_from_path(&path)?;
 
                 // https://xiph.org/vorbis/doc/v-comment.html
@@ -180,7 +228,7 @@ impl NativeMetadataFormat {
                     }
                 };
 
-                Ok(NativeMetadata {
+                NativeMetadata {
                     fmt,
                     title,
                     album,
@@ -191,8 +239,9 @@ impl NativeMetadataFormat {
                     num_tracks: track_idx,
                     track: num_tracks,
                     genres,
-                })
+                }
             }
-        }
+        };
+        Ok((ext, meta))
     }
 }

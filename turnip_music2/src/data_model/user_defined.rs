@@ -2,12 +2,9 @@
 //! - `library.tm2.toml` [ConfigFile], which controls input and export settings.
 //! - `music.tm2.toml` [GroupFile], which defines metadata for individual groups of songs.
 
-use crate::data_model::{
-    CddbDiscId,
-    MbDiscId,
-    MbId,
-    // metadata::{self, song},
-};
+use std::ffi::OsString;
+
+use crate::data_model::{CddbDiscId, MbDiscId, MbId, native_metadata::NativeMusicExt};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
@@ -116,13 +113,13 @@ pub struct ExportConfig {
     /// zero or more target output formats.
     /// if empty, songs will never be reencoded.
     /// otherwise, if a song is not in any listed format, it will be reencoded as the first format.
-    pub target_format: Vec<String>,
+    pub target_format: Vec<NativeMusicExt>,
     /// ffmpeg parameters used for reencode.
     /// inserted within the command list as `["ffmpeg", "-i", input] + reencode_params + [output]`.
     /// For MP3, try `["-codec:a", libmp3lame", "-qscale:a", "4"]` as suggested in [the ffmpeg documentation](https://trac.ffmpeg.org/wiki/Encode/MP3).
     ///
     /// Either this or target_bitrate should be set. If neither set, ffmpeg defaults will be used.
-    pub reencode_params: Option<Vec<String>>,
+    pub reencode_params: Option<Vec<OsString>>,
     /// target bitrate for reencode.
     /// in kilobits per second.
     ///

@@ -1,7 +1,11 @@
 use crate::{
-    data_model::{native_metadata::NativeMetadata, user_defined},
+    data_model::{
+        native_metadata::{NativeMetadata, NativeMusicExt},
+        user_defined,
+    },
     fs::{Fs, FsPathBuf},
 };
+use anyhow::anyhow;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GroupFile<F: Fs> {
@@ -11,7 +15,7 @@ pub enum GroupFile<F: Fs> {
         title: String, // TODO use a tag system or something
 
         /// Pairs of (full path, metadata)
-        files: Vec<(F::PathBuf, CompilationFileMeta)>,
+        files: Vec<(F::PathBuf, NativeMusicExt, CompilationFileMeta)>,
     },
     /// Partial album
     Album {
@@ -21,12 +25,16 @@ pub enum GroupFile<F: Fs> {
         album_art: Option<F::PathBuf>,
 
         /// Pairs of (full path, metadata)
-        files: Vec<(F::PathBuf, AlbumFileMeta)>,
+        files: Vec<(F::PathBuf, NativeMusicExt, AlbumFileMeta)>,
     },
 }
 
 impl<F: Fs> GroupFile<F> {
-    pub fn from_user(root_path: &F::Path, g: user_defined::GroupFile) -> Self {
+    pub fn from_user(
+        fs: &F,
+        root_path: &F::Path,
+        g: user_defined::GroupFile,
+    ) -> anyhow::Result<Self> {
         match g {
             user_defined::GroupFile::Compilation {
                 origin,
@@ -41,28 +49,42 @@ impl<F: Fs> GroupFile<F> {
 
                         let (meta, idx) = CompilationFileMeta::from_user(file_meta, &global);
 
-                        (full_path, meta, idx)
+                        // TODO this snippet shouldn't be repeated everywhere...
+                        let ext = fs
+                            .path_ext(full_path.as_ref())
+                            .map(|e| e.to_str())
+                            .flatten()
+                            .map(|e| e.parse().ok())
+                            .flatten()
+                            .ok_or_else(|| {
+                                anyhow!(
+                                    "Song file path '{:?}' is not a recognized music file",
+                                    full_path
+                                )
+                            })?;
+
+                        Ok((full_path, ext, meta, idx))
                     })
-                    .collect::<Vec<_>>();
+                    .collect::<anyhow::Result<Vec<_>>>()?;
                 // Sort.
                 // Send Some(key) to the start, and then order by key within Some(key).
                 // This allows ordering compilations per-track (ascending keys) or simply grouping similar tracks.
                 // All non-sorted keys are sent to the end.
-                files.sort_by(|(_, _, s1), (_, _, s2)| match (s1, s2) {
+                files.sort_by(|(_, _, _, s1), (_, _, _, s2)| match (s1, s2) {
                     (None, None) => std::cmp::Ordering::Equal,
                     (None, Some(_)) => std::cmp::Ordering::Less,
                     (Some(_), None) => std::cmp::Ordering::Greater,
                     (Some(s1), Some(s2)) => s1.cmp(&s2),
                 });
 
-                GroupFile::Compilation {
+                Ok(GroupFile::Compilation {
                     origin,
                     title,
                     files: files
                         .into_iter()
-                        .map(|(p, m, _)| (p, m))
+                        .map(|(p, ext, m, _)| (p, ext, m))
                         .collect::<Vec<_>>(),
-                }
+                })
             }
             user_defined::GroupFile::Album {
                 origin,
@@ -80,28 +102,42 @@ impl<F: Fs> GroupFile<F> {
                         let meta =
                             AlbumFileMeta::from_user(file_meta, &global, &mut disc, &mut track);
 
-                        (full_path, meta)
+                        // TODO this snippet shouldn't be repeated everywhere...
+                        let ext: NativeMusicExt = fs
+                            .path_ext(full_path.as_ref())
+                            .map(|e| e.to_str())
+                            .flatten()
+                            .map(|e| e.parse().ok())
+                            .flatten()
+                            .ok_or_else(|| {
+                                anyhow!(
+                                    "Song file path '{:?}' is not a recognized music file",
+                                    full_path
+                                )
+                            })?;
+
+                        Ok((full_path, ext, meta))
                     })
-                    .collect::<Vec<_>>();
+                    .collect::<anyhow::Result<Vec<_>>>()?;
                 // Sort.
                 // Send album: None to the start, order by (album, track) ascending otherwise
-                files.sort_by(
-                    |(_, m1), (_, m2)| match (m1.disc, m2.disc, m1.track, m2.track) {
+                files.sort_by(|(_, _, m1), (_, _, m2)| {
+                    match (m1.disc, m2.disc, m1.track, m2.track) {
                         (None, None, t1, t2) => t1.cmp(&t2),
                         (None, Some(_), _, _) => std::cmp::Ordering::Less,
                         (Some(_), None, _, _) => std::cmp::Ordering::Greater,
                         (Some(a1), Some(a2), t1, t2) => (a1, t1).cmp(&(a2, t2)),
-                    },
-                );
+                    }
+                });
 
                 // pull the data out of the mapping, ordered by the final ordering of rel_song_paths
-                GroupFile::Album {
+                Ok(GroupFile::Album {
                     origin,
                     album_art: album_art
                         .as_ref()
                         .map(|rel_path| root_path.to_owned().joined(&rel_path)),
                     files,
-                }
+                })
             }
         }
     }

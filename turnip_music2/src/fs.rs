@@ -1,7 +1,7 @@
 use std::{ffi::OsStr, fmt::Debug, hash::Hash};
 
 use crate::data_model::{
-    native_metadata::{NativeMetadata, NativeMetadataFormat},
+    native_metadata::{NativeMetadata, NativeMetadataFormat, NativeMusicExt},
     user_defined::{ConfigFile, GroupFile},
 };
 
@@ -40,7 +40,7 @@ pub trait Fs {
     fn parse_native_metadata<P: AsRef<Self::Path>>(
         &self,
         path: P,
-    ) -> anyhow::Result<NativeMetadata>;
+    ) -> anyhow::Result<(Option<NativeMusicExt>, NativeMetadata)>;
     fn parse_config_file<P: AsRef<Self::Path>>(
         &self,
         path: P,
@@ -129,7 +129,7 @@ impl Fs for StdFs {
     fn parse_native_metadata<P: AsRef<Self::Path>>(
         &self,
         path: P,
-    ) -> anyhow::Result<NativeMetadata> {
+    ) -> anyhow::Result<(Option<NativeMusicExt>, NativeMetadata)> {
         Ok(NativeMetadataFormat::parse_from_file(path.as_ref())?)
     }
     fn parse_config_file<P: AsRef<Self::Path>>(
