@@ -54,6 +54,7 @@ impl From<NativeMusicExt> for NativeMetadataFormat {
             NativeMusicExt::Mp3 | NativeMusicExt::Wav | NativeMusicExt::Aiff => {
                 NativeMetadataFormat::Id3
             }
+            // TODO: the Flac format I'm using is Ogg Vorbis... surely Ogg is also capable
             NativeMusicExt::Ogg => NativeMetadataFormat::None,
             NativeMusicExt::Flac => NativeMetadataFormat::Flac,
             NativeMusicExt::M4a => NativeMetadataFormat::M4a,
@@ -65,8 +66,17 @@ impl From<NativeMusicExt> for NativeMetadataFormat {
 pub enum NativeMetadataFormat {
     #[default]
     None,
+    /// - <https://id3.org/id3v2.3.0>
+    /// - <https://web.archive.org/web/20260330001711/https://id3.org/id3v2.3.0>
     Id3,
+    /// [mp4ameta]
     M4a,
+    /// FLAC uses Vorbis comments
+    /// - <https://datatracker.ietf.org/doc/rfc9639/>
+    /// - <https://xiph.org/vorbis/doc/v-comment.html>
+    ///
+    /// Reddit recommends these standard tags:
+    /// - <https://taglib.org/api/p_propertymapping.html>
     Flac,
 }
 
@@ -175,7 +185,9 @@ impl NativeMetadataFormat {
             NativeMetadataFormat::Flac => {
                 let tag = metaflac::Tag::read_from_path(&path)?;
 
-                // https://xiph.org/vorbis/doc/v-comment.html
+                // <https://datatracker.ietf.org/doc/rfc9639/>
+                // <https://xiph.org/vorbis/doc/v-comment.html>
+                // <https://taglib.org/api/p_propertymapping.html>
                 // TODO include musicbrainz tags?
                 // e.g.
                 // Title            Dance!
@@ -191,38 +203,68 @@ impl NativeMetadataFormat {
                     .get_vorbis("album")
                     .map(|iter| iter.last().map(str::to_owned))
                     .flatten();
-                let artist = tag
+                let album_artists = tag
+                    .get_vorbis("albumartist")
+                    .into_iter()
+                    .flat_map(|iter| iter.map(str::to_owned))
+                    .collect::<Vec<_>>();
+                let artists = tag
                     .get_vorbis("artist")
-                    .map(|iter| iter.last().map(str::to_owned))
-                    .flatten();
+                    .into_iter()
+                    .flat_map(|iter| iter.map(str::to_owned))
+                    .collect::<Vec<_>>();
                 let genres = tag
                     .get_vorbis("genre")
-                    .map(|iter| iter.last().map(str::to_owned))
-                    .flatten()
                     .into_iter()
+                    .flat_map(|iter| iter.map(str::to_owned))
                     .collect::<Vec<_>>();
+
+                let track_disc_num_regex =
+                    regex::Regex::new(r"(\d+)(/(\d+))?").expect("regex must never fail");
+
+                let disc_number_str = tag
+                    .get_vorbis("discnumber")
+                    .map(|iter| iter.last()) // NOT to_owned, don't need that
+                    .flatten()
+                    .unwrap_or_default();
+                let (disc, num_discs) = {
+                    match track_disc_num_regex.captures(disc_number_str) {
+                        Some(cs) => {
+                            let idx = cs
+                                .get(1)
+                                .expect("can't match regex without first group")
+                                .as_str()
+                                .parse::<u64>()?;
+                            let num = match cs.get(2) {
+                                Some(m) => Some(m.as_str().parse::<u64>()?),
+                                None => None,
+                            };
+
+                            (Some(idx), num)
+                        }
+                        None => (None, None),
+                    }
+                };
 
                 let track_number_str = tag
                     .get_vorbis("tracknumber")
                     .map(|iter| iter.last()) // NOT to_owned, don't need that
                     .flatten()
                     .unwrap_or_default();
-                let track_num_regex =
-                    regex::Regex::new(r"(\d+)(/(\d+))?").expect("regex must never fail");
-                let (track_idx, num_tracks) = {
-                    match track_num_regex.captures(track_number_str) {
+                let (track, num_tracks) = {
+                    match track_disc_num_regex.captures(track_number_str) {
                         Some(cs) => {
-                            let track_idx = cs
+                            let idx = cs
                                 .get(1)
                                 .expect("can't match regex without first group")
                                 .as_str()
                                 .parse::<u64>()?;
-                            let track_num = match cs.get(2) {
+                            let num = match cs.get(2) {
                                 Some(m) => Some(m.as_str().parse::<u64>()?),
                                 None => None,
                             };
 
-                            (Some(track_idx), track_num)
+                            (Some(idx), num)
                         }
                         None => (None, None),
                     }
@@ -232,12 +274,12 @@ impl NativeMetadataFormat {
                     fmt,
                     title,
                     album,
-                    album_artists: vec![],
-                    artists: artist.into_iter().collect(),
-                    num_discs: None,
-                    disc: None,
-                    num_tracks: track_idx,
-                    track: num_tracks,
+                    album_artists,
+                    artists,
+                    num_discs,
+                    disc,
+                    num_tracks,
+                    track,
                     genres,
                 }
             }

@@ -984,8 +984,7 @@ mod export {
             Ok(export)
         }();
 
-        let export = export.unwrap();
-        // TODO first thing to fix: the sanitization process gets rid of the . on file outputs
+        let (export, ffmpegs) = export.unwrap();
 
         // None of the tracks have albums, so
         assert_eq!(
@@ -1004,7 +1003,7 @@ mod export {
             }
         );
 
-        dbg!(export);
+        dbg!(export, ffmpegs);
         assert!(false);
     }
 

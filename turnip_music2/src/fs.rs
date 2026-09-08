@@ -1,17 +1,29 @@
-use std::{ffi::OsStr, fmt::Debug, hash::Hash};
+use std::{
+    ffi::{OsStr, OsString},
+    fmt::Debug,
+    hash::Hash,
+    ops::{Add, Div},
+    process::Output,
+};
 
-use crate::data_model::{
-    native_metadata::{NativeMetadata, NativeMetadataFormat, NativeMusicExt},
-    user_defined::{ConfigFile, GroupFile},
+use crate::{
+    data_model::{
+        native_metadata::{NativeMetadata, NativeMetadataFormat, NativeMusicExt},
+        user_defined::{ConfigFile, GroupFile},
+    },
+    export::ToOsString,
 };
 
 pub trait FsPathBuf<Path: ?Sized>:
-    Clone + Hash + Debug + PartialEq + Eq + PartialOrd + Ord
+    Clone + Hash + Debug + PartialEq + Eq + PartialOrd + Ord + ToOsString + AsRef<Path>
 {
     fn parse_path_from_user_str(s: &str) -> Self;
     fn build<S: AsRef<str>, I: Iterator<Item = S>>(components: I) -> Self;
     /// Return the path, having added one or more components as parsed from the argument.
-    fn joined(self, p: &str) -> Self;
+    fn joined(self, p: &str) -> Self {
+        self.plus(Self::parse_path_from_user_str(p).as_ref())
+    }
+    fn plus(self, p: &Path) -> Self;
     /// Applies the function to every path component and returns a copy
     fn map<F: FnMut(&str) -> String>(&self, f: F) -> Self;
 }
@@ -19,15 +31,18 @@ pub trait FsPathBuf<Path: ?Sized>:
 /// Minimal trait encoding only the necessary components of a filesystem scanner.
 pub trait Fs {
     type Path: ?Sized + ToOwned<Owned = Self::PathBuf> + AsRef<Self::Path>;
-    type PathBuf: AsRef<Self::Path> + FsPathBuf<Self::Path>;
+    type PathBuf: FsPathBuf<Self::Path>;
 
     fn read_dir<'s, P: AsRef<Self::Path>>(
         &'s self,
         path: P,
     ) -> anyhow::Result<impl Iterator<Item = anyhow::Result<Self::PathBuf>>>;
+
+    // TODO these should be FsPathBuf or FsPath
     fn path_trailing<'p>(&self, path: &'p Self::Path) -> Option<&'p OsStr>;
     fn path_ext<'p>(&self, path: &'p Self::Path) -> Option<&'p OsStr>;
     fn path_parent_dir<'p>(&self, path: &'p Self::Path) -> Option<Self::PathBuf>;
+
     fn is_file<P: AsRef<Self::Path>>(&self, path: P) -> bool;
     fn is_dir<P: AsRef<Self::Path>>(&self, path: P) -> bool;
     fn strip_prefix<'a, P: AsRef<Self::Path>>(
@@ -58,14 +73,19 @@ pub trait Fs {
 }
 
 pub struct StdFs;
+impl ToOsString for std::path::PathBuf {
+    fn to_os_string(self) -> OsString {
+        self.into_os_string()
+    }
+}
 impl FsPathBuf<std::path::Path> for std::path::PathBuf {
     fn parse_path_from_user_str(s: &str) -> Self {
         // This parses multiple path components from the string, instead of creating a single
         std::path::PathBuf::from(s)
     }
 
-    fn joined(mut self, p: &str) -> Self {
-        std::path::PathBuf::push(&mut self, std::path::PathBuf::from(p));
+    fn plus(mut self, p: &std::path::Path) -> Self {
+        std::path::PathBuf::push(&mut self, p);
         self
     }
 

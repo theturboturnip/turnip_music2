@@ -9,7 +9,7 @@ use crate::{
         parsed,
         user_defined::{self, CompilationMode::AsM3u8, ConfigFile, ConfigFileInputs, ExportConfig},
     },
-    export::{ExportContext, build_export_jobs},
+    export::{ExportContext, FfmpegArgs, build_export_jobs},
     fs::{Fs, FsPathBuf},
     scanner::{Group, scan_dir, scan_library},
     toml::TomlItemExt,
@@ -481,7 +481,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
         Ok(())
     }
 
-    pub fn export(&mut self, config: &str) -> anyhow::Result<ExportContext<F>> {
+    pub fn export(&mut self, config: &str) -> anyhow::Result<(ExportContext<F>, Vec<FfmpegArgs>)> {
         if self.loaded_library.is_none() {
             // TODO warning
             bail!("No loaded library")
@@ -511,6 +511,13 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
             library.group_files.iter(),
         )?;
 
-        Ok(exports)
+        let output_dir = self.library_dir.clone().joined(&config.output_path);
+        let ffmpegs = exports
+            .song_exports
+            .iter()
+            .map(|export| exports.export_song_to_ffmpeg(&self.library_dir, &output_dir, export))
+            .collect();
+
+        Ok((exports, ffmpegs))
     }
 }

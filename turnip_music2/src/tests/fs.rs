@@ -4,6 +4,7 @@ use crate::{
         native_metadata::{NativeMetadata, NativeMetadataFormat, NativeMusicExt},
         user_defined::{self, ConfigFile, ConfigFileInputs, GroupFile, Origin},
     },
+    export::ToOsString,
     fs::{Fs, FsPathBuf},
 };
 use std::ffi::OsStr;
@@ -20,15 +21,22 @@ pub enum TestFs {
     SomethingElse,
 }
 
+impl ToOsString for Vec<String> {
+    fn to_os_string(self) -> std::ffi::OsString {
+        // TODO handle escaping, backslashes, etc.
+        self.join("/").to_os_string()
+    }
+}
 /// TODO absolute path support
 /// TODO ../ support
 impl FsPathBuf<[String]> for Vec<String> {
     fn parse_path_from_user_str(s: &str) -> Self {
+        // TODO handle escaping, backslashes, etc.
         s.split("/").map(|s| s.to_owned()).collect()
     }
 
-    fn joined(mut self, p: &str) -> Self {
-        self.extend(Self::parse_path_from_user_str(p));
+    fn plus(mut self, p: &[String]) -> Self {
+        self.extend(p.iter().map(|s| s.clone()));
         self
     }
 

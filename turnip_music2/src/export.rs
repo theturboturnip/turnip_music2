@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    ffi::OsString,
+    ffi::{OsStr, OsString},
 };
 
 use anyhow::{anyhow, bail};
@@ -8,7 +8,7 @@ use indexmap::IndexMap;
 
 use crate::{
     data_model::{
-        native_metadata::{NativeMetadata, NativeMusicExt},
+        native_metadata::{NativeMetadata, NativeMetadataFormat, NativeMusicExt},
         parsed, user_defined,
     },
     fs::{Fs, FsPathBuf},
@@ -139,24 +139,31 @@ pub fn build_export_jobs<
     Ok(exports)
 }
 
-/// ffmpeg command line args, effectively
-/// OsString for passing into
-pub struct ExportJob(Vec<OsString>);
+/// ffmpeg command line args, effectively.
+/// OsString for passing into [subprocess] eventually
+#[derive(Debug, Clone)]
+pub struct FfmpegArgs(Vec<OsString>);
+
+#[derive(Debug)]
+pub struct ExportSong<F: Fs> {
+    /// lib-relative
+    input_path: F::PathBuf,
+    input_ext: NativeMusicExt,
+
+    /// output-dir-relative
+    output_path: F::PathBuf,
+    output_ext: NativeMusicExt,
+    output_meta: NativeMetadata,
+}
 
 #[derive(Debug)]
 pub struct ExportContext<F: Fs> {
     config: user_defined::ExportConfig,
 
-    /// lib-relative output paths to create
+    /// output-dir-relative output paths to create
     pub folders_to_make: HashSet<F::PathBuf>,
     /// lib-relative input_path, inputlib-relative output_path, outputoutput metadata
-    pub song_exports: Vec<(
-        F::PathBuf,
-        NativeMusicExt,
-        F::PathBuf,
-        NativeMusicExt,
-        NativeMetadata,
-    )>,
+    pub song_exports: Vec<ExportSong<F>>,
     /// title -> (m3u8_path, lib-relative song_paths)
     pub m3u8_exports: IndexMap<String, (F::PathBuf, Vec<F::PathBuf>)>,
     all_outputs: HashSet<F::PathBuf>,
@@ -305,15 +312,233 @@ impl<F: Fs> ExportContext<F> {
             }
         }
 
-        self.song_exports.push((
-            input_file.to_owned(),
+        self.song_exports.push(ExportSong {
+            input_path: input_file.to_owned(),
             input_ext,
-            output_file,
+            output_path: output_file,
             output_ext,
-            metadata,
-        ));
+            output_meta: metadata,
+        });
+    }
+
+    /// - input_prefix should be an offset to the library directory.
+    /// - output_prefix should be an offset to the output directory.
+    pub fn export_song_to_ffmpeg(
+        &self,
+        input_prefix: &F::PathBuf,
+        output_prefix: &F::PathBuf,
+        export: &ExportSong<F>,
+    ) -> FfmpegArgs {
+        let mut args = vec![
+            // Pull in the input
+            "-i".to_os_string(),
+            input_prefix
+                .clone()
+                .plus(&export.input_path.as_ref())
+                .to_os_string(),
+            // Clear all metadata
+            "-map_metadata".to_os_string(),
+            "-1".to_os_string(),
+        ];
+
+        if export.input_ext == export.output_ext {
+            // No point reencoding
+            args.push("-codec:a".to_os_string());
+            args.push("copy".to_os_string());
+        } else if let Some(params) = self.config.reencode_params.as_ref() {
+            // Use the provided args
+            args.extend(params.iter().map(|p| p.clone()));
+        } else if let Some(bitrate) = self.config.target_bitrate {
+            // Just put in bitrate, assume it'll figure out what encoder to use
+            args.push("-b:a".to_os_string());
+            args.push(format!("{bitrate}k").to_os_string());
+        } else {
+            // TODO what should I do here?
+        }
+
+        // Put in metadata
+        let mut push_metadata = |key: &str, value: &str| -> () {
+            args.push("-metadata".to_os_string());
+            if !value.contains('"') {
+                args.push(format!("{key}=\"{value}\"").to_os_string());
+            } else {
+                let value = value.replace("\"", "\\\"");
+                args.push(format!("{key}=\"{value}\"").to_os_string());
+            }
+        };
+        // TODO configurable mode for concatenating artists together or putting multiple tags?
+        let output_meta_fmt: NativeMetadataFormat = export.output_ext.into();
+        // Each of these blocks configures the generic ffmpeg metadata keys
+        // <https://ffmpeg.org/doxygen/7.0/group__metadata__api.html>
+        // <https://wiki.multimedia.cx/index.php/FFmpeg_Metadata>
+        // based on the respective specifications
+        match output_meta_fmt {
+            NativeMetadataFormat::None => {
+                // Do nothing
+            }
+            NativeMetadataFormat::Id3 => {
+                // <https://id3.org/id3v2.3.0>
+                // <https://web.archive.org/web/20260330001711/https://id3.org/id3v2.3.0>
+
+                // title is always present
+                push_metadata("title", export.output_meta.title.as_ref().unwrap());
+
+                if let Some(album) = export.output_meta.album.as_ref() {
+                    push_metadata("album", album);
+                }
+
+                // ID3 doesn't technically have a separate album_artists tag.
+                // ffmpeg uses the separate TPE2 tag, so it's supported here.
+                // HOWEVER: this only supports ONE album_artist.
+                // The spec doesn't mention 'separated with a "/" character'.
+                if !export.output_meta.album_artists.is_empty() {
+                    push_metadata("album_artist", &export.output_meta.album_artists[0])
+                    // TODO warning for multiple album_artists, only one will be honored
+                }
+
+                if !export.output_meta.artists.is_empty() {
+                    // artists are separated by the '/' character
+                    // TODO if any artist has the / character, warn the user
+                    push_metadata("artist", &export.output_meta.artists.join("/"))
+                }
+
+                // This is ID3v2.3 exclusive, TPOS key
+                // > The 'Part of a set' frame is a numeric string that describes which part of a set the audio came from. This frame is used if the source described in the "TALB" frame is divided into several mediums, e.g. a double CD. The value may be extended with a "/" character and a numeric string containing the total number of parts in the set. E.g. "1/2".
+                match (export.output_meta.disc, export.output_meta.num_discs) {
+                    (Some(disc), Some(n)) => push_metadata("disc", &format!("{disc}/{n}")),
+                    (Some(disc), _) => push_metadata("disc", &format!("{disc}")),
+                    // This needs to start with 0 - 'may be extended' implies something at the front
+                    (_, Some(n)) => push_metadata("disc", &format!("0/{n}")),
+                    _ => {}
+                }
+
+                // TRCK key
+                // > The 'Track number/Position in set' frame is a numeric string containing the order number of the audio-file on its original recording. This may be extended with a "/" character and a numeric string containing the total numer of tracks/elements on the original recording. E.g. "4/9".
+                match (export.output_meta.track, export.output_meta.num_tracks) {
+                    (Some(track), Some(n)) => push_metadata("track", &format!("{track}/{n}")),
+                    (Some(track), _) => push_metadata("track", &format!("{track}")),
+                    // This needs to start with 0 - 'may be extended' implies something at the front
+                    (_, Some(n)) => push_metadata("track", &format!("0/{n}")),
+                    _ => {}
+                }
+
+                // TODO numerify genre?
+                // > The 'Content type', which previously was stored as a one byte numeric value only, is now a numeric string. You may use one or several of the types as ID3v1.1 did or, since the category list would be impossible to maintain with accurate and up to date categories, define your own.
+                if !export.output_meta.genres.is_empty() {
+                    push_metadata("genre", &export.output_meta.genres[0]);
+                    // TODO warning for multiple genres
+                }
+
+                // TODO sort keys for album/artist/title, that's ID3v2.4+ only
+            }
+            NativeMetadataFormat::M4a => {
+                // title is always present
+                push_metadata("title", export.output_meta.title.as_ref().unwrap());
+
+                if let Some(album) = export.output_meta.album.as_ref() {
+                    push_metadata("album", album);
+                }
+
+                // m4a supports multiple instances of the album_artist tag.
+                // m4a ffmpeg supports exactly one album_artist.
+                if !export.output_meta.album_artists.is_empty() {
+                    push_metadata("album_artist", &export.output_meta.album_artists[0])
+                    // TODO warning for multiple album_artists, only one will be honored
+                }
+
+                // m4a supports multiple instances of the artist tag.
+                // m4a ffmpeg supports exactly one artist.
+                if !export.output_meta.artists.is_empty() {
+                    push_metadata("author", &export.output_meta.artists[0])
+                    // TODO warning for multiple artists, only one will be honored
+                }
+
+                // These should work
+                // https://github.com/FFmpeg/FFmpeg/blob/35b7df64a0146fc0e2effb88151f912dcd80756b/libavformat/movenc.c#L4794
+                match (export.output_meta.disc, export.output_meta.num_discs) {
+                    (Some(disc), Some(n)) => push_metadata("disc", &format!("{disc}/{n}")),
+                    (Some(disc), _) => push_metadata("disc", &format!("{disc}")),
+                    // ffmpeg always expects this to start with a number
+                    (_, Some(n)) => push_metadata("disc", &format!("0/{n}")),
+                    _ => {}
+                }
+                match (export.output_meta.track, export.output_meta.num_tracks) {
+                    (Some(track), Some(n)) => push_metadata("track", &format!("{track}/{n}")),
+                    (Some(track), _) => push_metadata("track", &format!("{track}")),
+                    // ffmpeg always expects this to start with a number
+                    (_, Some(n)) => push_metadata("track", &format!("0/{n}")),
+                    _ => {}
+                }
+
+                // TODO numerify genre?
+                // > The 'Content type', which previously was stored as a one byte numeric value only, is now a numeric string. You may use one or several of the types as ID3v1.1 did or, since the category list would be impossible to maintain with accurate and up to date categories, define your own.
+                if !export.output_meta.genres.is_empty() {
+                    push_metadata("genre", &export.output_meta.genres[0]);
+                    // TODO warning for multiple genres, only one will be honored
+                }
+            }
+            NativeMetadataFormat::Flac => {
+                // TODO: test that ffmpeg Flac even supports metadata in the first place
+                // TODO: be sad that ffmpeg doesn't support multiple values per metadata key
+
+                // title is always present
+                push_metadata("title", export.output_meta.title.as_ref().unwrap());
+
+                if let Some(album) = export.output_meta.album.as_ref() {
+                    push_metadata("album", album);
+                }
+
+                // m4a supports multiple instances of the album_artist tag.
+                // m4a ffmpeg supports exactly one album_artist.
+                if !export.output_meta.album_artists.is_empty() {
+                    push_metadata("albumartist", &export.output_meta.album_artists[0])
+                    // TODO warning for multiple album_artists, only one will be honored
+                }
+
+                // m4a supports multiple instances of the artist tag.
+                // m4a ffmpeg supports exactly one artist.
+                if !export.output_meta.artists.is_empty() {
+                    push_metadata("artist", &export.output_meta.artists[0])
+                    // TODO warning for multiple artists, only one will be honored
+                }
+
+                match (export.output_meta.disc, export.output_meta.num_discs) {
+                    (Some(disc), Some(n)) => push_metadata("discnumber", &format!("{disc}/{n}")),
+                    (Some(disc), _) => push_metadata("discnumber", &format!("{disc}")),
+                    // ffmpeg always expects this to start with a number
+                    (_, Some(n)) => push_metadata("discnumber", &format!("0/{n}")),
+                    _ => {}
+                }
+                match (export.output_meta.track, export.output_meta.num_tracks) {
+                    (Some(track), Some(n)) => push_metadata("tracknumber", &format!("{track}/{n}")),
+                    (Some(track), _) => push_metadata("tracknumber", &format!("{track}")),
+                    // ffmpeg always expects this to start with a number
+                    (_, Some(n)) => push_metadata("tracknumber", &format!("0/{n}")),
+                    _ => {}
+                }
+
+                // TODO numerify genre?
+                if !export.output_meta.genres.is_empty() {
+                    push_metadata("genre", &export.output_meta.genres[0]);
+                    // TODO warning for multiple genres, only one will be honored
+                }
+            }
+        }
+
+        // Finally, output
+        args.push("-o".to_os_string());
+        args.push(
+            output_prefix
+                .clone()
+                .plus(export.output_path.as_ref())
+                .to_os_string(),
+        );
+
+        FfmpegArgs(args)
     }
 }
+
+// TODO test exported output somehow
 
 enum NumberContext {
     NoNumbering,
@@ -321,4 +546,18 @@ enum NumberContext {
         disc_digits: usize,
         track_digits: usize,
     },
+}
+
+pub trait ToOsString {
+    fn to_os_string(self) -> OsString;
+}
+impl<'a> ToOsString for &'a str {
+    fn to_os_string(self) -> OsString {
+        OsStr::new(self).to_owned()
+    }
+}
+impl<'a> ToOsString for String {
+    fn to_os_string(self) -> OsString {
+        self.as_str().to_os_string()
+    }
 }
