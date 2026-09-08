@@ -3,7 +3,7 @@ use std::{
     ffi::{OsStr, OsString},
 };
 
-use anyhow::{anyhow, bail};
+use anyhow::anyhow;
 use indexmap::IndexMap;
 
 use crate::{
@@ -33,20 +33,16 @@ pub fn build_export_jobs<
 
     for g in group_files {
         match &g.parsed {
-            parsed::GroupFile::Album {
-                origin,
-                album_art,
-                files,
-            } => {
+            parsed::GroupFile::Album { files, .. } => {
                 // Gather exported songs
                 for (path, ext, meta) in files.iter() {
                     to_export.push((path.as_ref(), *ext, meta.clone().into(), None));
                 }
             }
             parsed::GroupFile::Compilation {
-                origin,
                 title: compilation_title,
                 files,
+                ..
             } => {
                 // Gather exported songs
                 match config.compilation_mode.unwrap_or_default() {

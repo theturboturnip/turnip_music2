@@ -2,8 +2,6 @@ use std::{
     ffi::{OsStr, OsString},
     fmt::Debug,
     hash::Hash,
-    ops::{Add, Div},
-    process::Output,
 };
 
 use crate::{

@@ -1,13 +1,9 @@
-use std::{
-    collections::{HashMap, HashSet},
-    ffi::{OsStr, OsString},
-};
+use std::{collections::HashSet, ffi::OsStr};
 
 use crate::{
     data_model::{
         native_metadata::{NativeMetadata, NativeMusicExt},
-        parsed,
-        user_defined::{self, CompilationMode::AsM3u8, ConfigFile, ConfigFileInputs, ExportConfig},
+        user_defined::{self, ConfigFile, ConfigFileInputs, ExportConfig},
     },
     export::{ExportContext, FfmpegArgs, build_export_jobs},
     fs::{Fs, FsPathBuf},
