@@ -5,6 +5,7 @@ use clap::Parser;
 use clap::Subcommand;
 use turnip_music2::cli::{CliContext, ImportMode};
 use turnip_music2::export::ToOsString;
+use turnip_music2::fs::Fs;
 use turnip_music2::fs::StdFs;
 use turnip_music2_cli::WarningLogger;
 
@@ -104,17 +105,13 @@ fn main() {
             Commands::Edit { .. } => todo!(),
             // Run internal closure to allow bailing if the first step fails
             Commands::Export { config, ffmpeg } => || -> anyhow::Result<()> {
-                let (export_context, ffmpeg_args) = ctx.prep_export(&config)?;
+                let export = ctx.prep_export(&config)?;
 
-                todo!("Generate output directories");
-
-                let ffmpeg = match ffmpeg {
+                let ffmpeg_path = match ffmpeg {
                     Some(f) => f,
                     None => "ffmpeg".to_os_string(),
                 };
-                ctx.execute_ffmpegs(&ffmpeg, ffmpeg_args)?;
-
-                todo!("Test all of this");
+                ctx.exec_export(export, &ffmpeg_path)?;
                 Ok(())
             }(),
         }

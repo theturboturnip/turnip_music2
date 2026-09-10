@@ -477,10 +477,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
         Ok(())
     }
 
-    pub fn prep_export(
-        &mut self,
-        config: &str,
-    ) -> anyhow::Result<(ExportContext<F>, Vec<FfmpegArgs>)> {
+    pub fn prep_export(&mut self, config: &str) -> anyhow::Result<ExportContext<F>> {
         if self.loaded_library.is_none() {
             // TODO warning
             bail!("No loaded library")
@@ -503,20 +500,38 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
             })?;
 
         // Gather info on songs
-        let exports = build_export_jobs(
+        let export = build_export_jobs(
             self.fs,
             self.warner,
             config.clone(),
             library.group_files.iter(),
         )?;
 
-        let output_dir = self.library_dir.clone().joined(&config.output_path);
-        let ffmpegs = exports
+        Ok(export)
+    }
+
+    pub fn exec_export(
+        &mut self,
+        export: ExportContext<F>,
+        ffmpeg_path: &OsStr,
+    ) -> anyhow::Result<()> {
+        let output_dir = self.library_dir.clone().joined(&export.config.output_path);
+
+        let ffmpeg_commands: Vec<FfmpegArgs> = export
             .song_exports
             .iter()
-            .map(|export| exports.export_song_to_ffmpeg(&self.library_dir, &output_dir, export))
+            .map(|s| export.export_song_to_ffmpeg(&self.library_dir, &output_dir, s))
             .collect();
 
-        Ok((exports, ffmpegs))
+        // Generate output directories
+        for path in export.folders_to_make {
+            self.fs.create_dir_all(path)?;
+        }
+
+        for cmd in ffmpeg_commands {
+            self.fs.execute_ffmpeg(ffmpeg_path, cmd)?;
+        }
+
+        Ok(())
     }
 }

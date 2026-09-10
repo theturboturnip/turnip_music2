@@ -140,7 +140,7 @@ pub fn build_export_jobs<
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FfmpegArgs(pub Vec<OsString>);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ExportSong<F: Fs> {
     /// lib-relative
     input_path: F::PathBuf,
@@ -152,9 +152,9 @@ pub struct ExportSong<F: Fs> {
     output_meta: NativeMetadata,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ExportContext<F: Fs> {
-    config: user_defined::ExportConfig,
+    pub config: user_defined::ExportConfig,
 
     /// output-dir-relative output paths to create
     pub folders_to_make: HashSet<F::PathBuf>,

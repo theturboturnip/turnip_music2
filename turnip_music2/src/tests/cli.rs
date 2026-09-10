@@ -931,6 +931,8 @@ title = "Misc Artistless Song"
 }
 
 mod export {
+    use std::ffi::OsStr;
+
     use super::*;
     use crate::cli::CliContext;
 
@@ -976,11 +978,12 @@ mod export {
             )?;
             ctx.reload_library()?;
             let export = ctx.prep_export("mp3")?;
+            ctx.exec_export(export.clone(), OsStr::new("ffmpeg"))?;
 
             Ok(export)
         }();
 
-        let (export, ffmpegs) = export.unwrap();
+        let export = export.unwrap();
 
         // None of the tracks have albums, so
         assert_eq!(
@@ -999,7 +1002,7 @@ mod export {
             }
         );
 
-        dbg!(export, ffmpegs);
+        dbg!(export, fs);
         assert!(false);
     }
 

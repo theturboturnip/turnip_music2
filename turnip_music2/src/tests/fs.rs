@@ -63,7 +63,7 @@ impl TestFs {
             'walk: while i <= constant_path_stack.len() {
                 let curr_path = &constant_path_stack[..i];
                 let rem_path = &constant_path_stack[i..];
-                match (curr_fs, &rem_path) {
+                match (&curr_fs, &rem_path) {
                     (entry, &[]) => return Ok(entry),
                     // local paths (".." not supported)
                     (TestFs::Dir(entries), &[next_comp, ..]) if next_comp == "." => {
@@ -95,12 +95,71 @@ impl TestFs {
         }
     }
 
+    fn take_dir_entries(&mut self) -> &mut Vec<(String, Self)> {
+        if let TestFs::Dir(entries) = self {
+            return entries;
+        };
+        panic!();
+    }
+    pub fn mkdir_p<'s, P: AsRef<<Self as Fs>::Path>>(&mut self, path: P) -> anyhow::Result<()> {
+        let constant_path_stack = path.as_ref();
+        {
+            let mut i = 0;
+            let mut curr_fs = self;
+            while i <= constant_path_stack.len() {
+                let curr_path = &constant_path_stack[..i];
+                let rem_path = &constant_path_stack[i..];
+                // Do a match to see if we hit a directory
+                let next_comp: &String = match (&mut curr_fs, &rem_path) {
+                    // We reached the end, didn't have to create anything, this entry must be a directory
+                    (TestFs::Dir(_), &[]) => return Ok(()),
+                    // local paths (".." not supported)
+                    (TestFs::Dir(_), &[next_comp, ..]) if next_comp == "." => {
+                        continue;
+                    }
+                    // TODO '..' support here should now work
+                    (TestFs::Dir(_), &[next_comp, ..]) => next_comp,
+                    (_, _) => {
+                        bail!(
+                            "Mkdir {constant_path_stack:?}: Arrived at {curr_path:?} {i} but it exists and is not a directory."
+                        )
+                    }
+                };
+                // We have hit a directory and need to either traverse into it or make a new subdirectory first.
+                // Either way, we will move forward
+                i += 1;
+                curr_fs = {
+                    let entries = curr_fs.take_dir_entries();
+                    // Search the entries...
+                    if entries
+                        .iter()
+                        .find(|(subpath, _entry)| subpath == next_comp)
+                        .is_some()
+                    {
+                        // ... and then search them *again* so we can go into the directory that already exists.
+                        // We could do this all in one, and potentially all in the above match, if we had
+                        // Polonius <https://blog.rust-lang.org/2026/08/04/enabling-polonius-alpha-on-nightly/>
+                        let matching_entry = entries
+                            .iter_mut()
+                            .find(|(subpath, _entry)| subpath == next_comp);
+                        &mut matching_entry.unwrap().1
+                    } else {
+                        let new_entry = entries.push_mut((next_comp.clone(), TestFs::Dir(vec![])));
+                        // Create a new directory
+                        &mut new_entry.1
+                    }
+                }
+            }
+            bail!("Mystery error");
+        }
+    }
+
     // TODO make this non-recursive
     pub fn overwrite<'s, P: AsRef<<Self as Fs>::Path>>(
         &mut self,
         path: P,
         file: TestFs,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Option<TestFs>> {
         // TODO absolute path support
         let path = path.as_ref();
         // Reborrow https://users.rust-lang.org/t/matching-on-mut-self-without-moving-it/101411
@@ -109,12 +168,12 @@ impl TestFs {
             (TestFs::Dir(entries), &[name]) => {
                 for (subpath, entry) in entries.iter_mut() {
                     if subpath == name {
-                        *entry = file;
-                        return Ok(());
+                        let old = std::mem::replace(entry, file);
+                        return Ok(Some(old));
                     }
                 }
                 entries.push((name.clone(), file));
-                Ok(())
+                Ok(None)
             }
             (_entry, &[_name]) => bail!("can't overwrite, containing level was not a directory"),
             // local paths (".." not supported)
@@ -257,10 +316,22 @@ impl Fs for TestFs {
         doc: toml_edit::DocumentMut,
     ) -> anyhow::Result<()> {
         let string = doc.to_string();
-        self.overwrite(path, TestFs::TextFile(string))
+        let overwritten = self.overwrite(path.as_ref(), TestFs::TextFile(string))?;
+        if let Some(overwritten) = overwritten
+            && !matches!(overwritten, TestFs::TextFile(..))
+        {
+            panic!(
+                "write_toml_file overwrote a {:?} at {:?} - likely unintended",
+                overwritten,
+                path.as_ref()
+            );
+        }
+        Ok(())
     }
 
-    // TODO mkdir_p function
+    fn create_dir_all<P: AsRef<Self::Path>>(&mut self, path: P) -> anyhow::Result<()> {
+        self.mkdir_p(path)
+    }
 
     fn execute_ffmpeg(&mut self, ffmpeg: &OsStr, args: FfmpegArgs) -> anyhow::Result<()> {
         let output_path = args
@@ -269,10 +340,17 @@ impl Fs for TestFs {
             .last()
             .map(|path| Self::PathBuf::parse_path_from_user_str(path.to_str().unwrap()))
             .expect("ffmpeg invocation {:?} should not be empty");
-        self.overwrite(
-            output_path,
+        let overwritten = self.overwrite(
+            &output_path,
             TestFs::FfmpegOutputFile(ffmpeg.to_owned(), args),
-        )
+        )?;
+        if let Some(overwritten) = overwritten {
+            panic!(
+                "execute_ffmpeg overwrote {:?} at path {:?}",
+                overwritten, &output_path,
+            );
+        }
+        Ok(())
     }
 }
 

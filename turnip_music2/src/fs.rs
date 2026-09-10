@@ -72,6 +72,9 @@ pub trait Fs {
         doc: toml_edit::DocumentMut,
     ) -> anyhow::Result<()>;
 
+    /// `mkdir -p` equivalent. In StdFs, maps to [std::fs::create_dir_all].
+    fn create_dir_all<P: AsRef<Self::Path>>(&mut self, path: P) -> anyhow::Result<()>;
+
     // TODO this should? shouldn't? require mut access?
     // TODO this should be async?
     fn execute_ffmpeg(&mut self, ffmpeg_path: &OsStr, args: FfmpegArgs) -> anyhow::Result<()>;
@@ -186,6 +189,12 @@ impl Fs for StdFs {
         }
         Ok(())
     }
+
+    fn create_dir_all<P: AsRef<Self::Path>>(&mut self, path: P) -> anyhow::Result<()> {
+        std::fs::create_dir_all(path)?;
+        Ok(())
+    }
+
     fn execute_ffmpeg(&mut self, ffmpeg_path: &OsStr, args: FfmpegArgs) -> anyhow::Result<()> {
         if self.dry_run {
             log::info!("Execute {ffmpeg_path:?} {:?}", args.0);
