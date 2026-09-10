@@ -166,13 +166,10 @@ pub struct ExportContext<F: Fs> {
 }
 impl<F: Fs> ExportContext<F> {
     fn new(config: user_defined::ExportConfig) -> Self {
-        let output_path = F::PathBuf::parse_path_from_user_str(&config.output_path);
-        let mut folders_to_make = HashSet::new();
-        folders_to_make.insert(output_path);
-
         Self {
             config,
-            folders_to_make,
+            // Don't need to initialize - could put in [""], but that would be redundant
+            folders_to_make: HashSet::new(),
             song_exports: vec![],
             m3u8_exports: IndexMap::new(),
             all_outputs: HashSet::new(),
@@ -194,6 +191,7 @@ impl<F: Fs> ExportContext<F> {
         } else {
             path
         };
+        // TODO test duplicate output warnings
         if self.all_outputs.contains(&path) {
             warner.warn(Warning::DuplicateOutputFile { path });
         } else {
@@ -282,6 +280,7 @@ impl<F: Fs> ExportContext<F> {
                 .map(|s| self.config.target_charset.unwrap_or_default().sanitize(s)),
         );
         // Add it to the list of outputted files
+        // TODO this shouldn't just be duplicates... for e.g. album paths they will be duplicated by definition
         self.check_duplicate_file(output_dir.clone(), warner);
         self.folders_to_make.insert(output_dir.clone());
 

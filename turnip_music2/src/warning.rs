@@ -41,11 +41,15 @@ pub enum Warning<PathBuf: Clone + PartialEq + Eq> {
 }
 
 /// TODO rename Warner
-pub trait WarningSender<PathBuf: Clone + PartialEq + Eq> {
+pub trait WarningSender<PathBuf: Clone + PartialEq + Eq + std::fmt::Debug>:
+    std::fmt::Debug
+{
     fn warn(&mut self, w: Warning<PathBuf>);
 }
 
-impl<PathBuf: Clone + PartialEq + Eq> WarningSender<PathBuf> for Vec<Warning<PathBuf>> {
+impl<PathBuf: Clone + PartialEq + Eq + std::fmt::Debug> WarningSender<PathBuf>
+    for Vec<Warning<PathBuf>>
+{
     fn warn(&mut self, w: Warning<PathBuf>) {
         self.push(w);
     }

@@ -978,6 +978,7 @@ mod export {
             )?;
             ctx.reload_library()?;
             let export = ctx.prep_export("mp3")?;
+
             ctx.exec_export(export.clone(), OsStr::new("ffmpeg"))?;
 
             Ok(export)

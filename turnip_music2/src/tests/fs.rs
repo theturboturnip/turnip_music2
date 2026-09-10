@@ -367,7 +367,10 @@ impl Fs for TestFs {
             &output_path,
             TestFs::FfmpegOutputFile(ffmpeg.to_owned(), args),
         )?;
-        if let Some(overwritten) = overwritten {
+        // Allow ffmpeg overwrites to collide, we have warnings for that
+        if let Some(overwritten) = overwritten
+            && !matches!(overwritten, TestFs::FfmpegOutputFile(..))
+        {
             panic!(
                 "execute_ffmpeg overwrote {:?} at path {:?}",
                 overwritten, &output_path,
