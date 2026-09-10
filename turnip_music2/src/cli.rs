@@ -515,8 +515,6 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
         export: ExportContext<F>,
         ffmpeg_path: &OsStr,
     ) -> anyhow::Result<()> {
-        dbg!(&mut self.warner);
-
         let output_dir = self.library_dir.clone().joined(&export.config.output_path);
 
         let ffmpeg_commands: Vec<FfmpegArgs> = export
@@ -526,7 +524,6 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
             .collect();
 
         // Generate output directories
-        dbg!(&export.folders_to_make);
         for path in export.folders_to_make {
             let path = output_dir.clone().plus(path.as_ref());
             self.fs.create_dir_all(path)?;
