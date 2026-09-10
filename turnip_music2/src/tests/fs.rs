@@ -4,10 +4,10 @@ use crate::{
         native_metadata::{NativeMetadata, NativeMetadataFormat, NativeMusicExt},
         user_defined::{self, ConfigFile, ConfigFileInputs, GroupFile, Origin},
     },
-    export::ToOsString,
+    export::{FfmpegArgs, ToOsString},
     fs::{Fs, FsPathBuf},
 };
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 
 use anyhow::bail;
 use string_literals::{s, string_vec};
@@ -15,6 +15,7 @@ use string_literals::{s, string_vec};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TestFs {
     MusicFile(NativeMetadata, Option<Chromaprint>),
+    FfmpegOutputFile(OsString, FfmpegArgs),
     TextFile(String),
     OtherFile,
     Dir(Vec<(String, TestFs)>),
@@ -257,6 +258,21 @@ impl Fs for TestFs {
     ) -> anyhow::Result<()> {
         let string = doc.to_string();
         self.overwrite(path, TestFs::TextFile(string))
+    }
+
+    // TODO mkdir_p function
+
+    fn execute_ffmpeg(&mut self, ffmpeg: &OsStr, args: FfmpegArgs) -> anyhow::Result<()> {
+        let output_path = args
+            .0
+            .iter()
+            .last()
+            .map(|path| Self::PathBuf::parse_path_from_user_str(path.to_str().unwrap()))
+            .expect("ffmpeg invocation {:?} should not be empty");
+        self.overwrite(
+            output_path,
+            TestFs::FfmpegOutputFile(ffmpeg.to_owned(), args),
+        )
     }
 }
 

@@ -137,8 +137,8 @@ pub fn build_export_jobs<
 
 /// ffmpeg command line args, effectively.
 /// OsString for passing into [subprocess] eventually
-#[derive(Debug, Clone)]
-pub struct FfmpegArgs(Vec<OsString>);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FfmpegArgs(pub Vec<OsString>);
 
 #[derive(Debug)]
 pub struct ExportSong<F: Fs> {
@@ -522,7 +522,6 @@ impl<F: Fs> ExportContext<F> {
         }
 
         // Finally, output
-        args.push("-o".to_os_string());
         args.push(
             output_prefix
                 .clone()

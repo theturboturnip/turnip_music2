@@ -975,7 +975,7 @@ mod export {
                 crate::cli::ImportMode::Compilation,
             )?;
             ctx.reload_library()?;
-            let export = ctx.export("mp3")?;
+            let export = ctx.prep_export("mp3")?;
 
             Ok(export)
         }();

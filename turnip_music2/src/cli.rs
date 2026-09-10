@@ -477,7 +477,10 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
         Ok(())
     }
 
-    pub fn export(&mut self, config: &str) -> anyhow::Result<(ExportContext<F>, Vec<FfmpegArgs>)> {
+    pub fn prep_export(
+        &mut self,
+        config: &str,
+    ) -> anyhow::Result<(ExportContext<F>, Vec<FfmpegArgs>)> {
         if self.loaded_library.is_none() {
             // TODO warning
             bail!("No loaded library")

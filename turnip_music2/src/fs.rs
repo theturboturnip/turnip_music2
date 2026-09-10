@@ -4,12 +4,15 @@ use std::{
     hash::Hash,
 };
 
+use anyhow::bail;
+use subprocess::Exec;
+
 use crate::{
     data_model::{
         native_metadata::{NativeMetadata, NativeMetadataFormat, NativeMusicExt},
         user_defined::{ConfigFile, GroupFile},
     },
-    export::ToOsString,
+    export::{FfmpegArgs, ToOsString},
 };
 
 pub trait FsPathBuf<Path: ?Sized>:
@@ -68,9 +71,15 @@ pub trait Fs {
         path: P,
         doc: toml_edit::DocumentMut,
     ) -> anyhow::Result<()>;
+
+    // TODO this should? shouldn't? require mut access?
+    // TODO this should be async?
+    fn execute_ffmpeg(&mut self, ffmpeg_path: &OsStr, args: FfmpegArgs) -> anyhow::Result<()>;
 }
 
-pub struct StdFs;
+pub struct StdFs {
+    pub dry_run: bool,
+}
 impl ToOsString for std::path::PathBuf {
     fn to_os_string(self) -> OsString {
         self.into_os_string()
@@ -170,7 +179,24 @@ impl Fs for StdFs {
         path: P,
         doc: toml_edit::DocumentMut,
     ) -> anyhow::Result<()> {
-        std::fs::write(path.as_ref(), doc.to_string().as_bytes())?;
+        if self.dry_run {
+            log::info!("Write to path {:?}: \n{}", path.as_ref(), doc.to_string());
+        } else {
+            std::fs::write(path.as_ref(), doc.to_string().as_bytes())?;
+        }
+        Ok(())
+    }
+    fn execute_ffmpeg(&mut self, ffmpeg_path: &OsStr, args: FfmpegArgs) -> anyhow::Result<()> {
+        if self.dry_run {
+            log::info!("Execute {ffmpeg_path:?} {:?}", args.0);
+        } else {
+            // TODO check this provides output, add a bool to StdFs to prevent it...
+            let exit = Exec::cmd(ffmpeg_path).args(&args.0).join()?;
+            if !exit.success() {
+                // TODO use a warner for this
+                bail!("ffmpeg command failed {:?} {:?}", ffmpeg_path, args.0);
+            }
+        }
         Ok(())
     }
 }

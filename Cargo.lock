@@ -1423,6 +1423,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
+name = "subprocess"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5c2982c58b661c6509861bd3383870b6918030606e8b5afb0ade14b4a3cff12"
+dependencies = [
+ "libc",
+ "winapi",
+]
+
+[[package]]
 name = "syn"
 version = "1.0.109"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1691,12 +1701,14 @@ dependencies = [
  "anyhow",
  "id3",
  "indexmap",
+ "log",
  "metaflac",
  "mp4ameta",
  "musicbrainz_rs",
  "regex",
  "serde",
  "string-literals",
+ "subprocess",
  "toml_edit",
 ]
 
