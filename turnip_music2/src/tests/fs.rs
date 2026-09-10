@@ -51,7 +51,6 @@ impl FsPathBuf<[String]> for Vec<String> {
 }
 
 impl TestFs {
-    // TODO these functions shouldn't be recursive, it discards information
     pub fn traverse<'s, P: AsRef<<Self as Fs>::Path>>(
         &'s self,
         path: P,
@@ -86,7 +85,7 @@ impl TestFs {
                     }
                     (_, &[next_comp, ..]) => {
                         bail!(
-                            "Path lookup {constant_path_stack:?}: At {curr_path:?} {i} that isn't a directory, tried to traverse into file {next_comp:?} that wasn't a directory"
+                            "Path lookup {constant_path_stack:?}: At {curr_path:?} {i} that isn't a directory, tried to traverse into file {next_comp:?}"
                         )
                     }
                 }
@@ -154,44 +153,68 @@ impl TestFs {
         }
     }
 
-    // TODO make this non-recursive
     pub fn overwrite<'s, P: AsRef<<Self as Fs>::Path>>(
         &mut self,
         path: P,
         file: TestFs,
     ) -> anyhow::Result<Option<TestFs>> {
-        // TODO absolute path support
-        let path = path.as_ref();
-        // Reborrow https://users.rust-lang.org/t/matching-on-mut-self-without-moving-it/101411
-        match (&mut *self, &path) {
-            (_entry, &[]) => bail!("can't overwrite, empty path"),
-            (TestFs::Dir(entries), &[name]) => {
-                for (subpath, entry) in entries.iter_mut() {
-                    if subpath == name {
-                        let old = std::mem::replace(entry, file);
-                        return Ok(Some(old));
+        let constant_path_stack = path.as_ref();
+        {
+            let mut i = 0;
+            let mut curr_fs = self;
+            'walk: while i <= constant_path_stack.len() {
+                let curr_path = &constant_path_stack[..i];
+                let rem_path = &constant_path_stack[i..];
+                // Do a match to see if we need to recurse into a directory
+                let next_comp: &String = match (&mut curr_fs, &rem_path) {
+                    (_entry, &[]) => {
+                        bail!("Can't overwrite, ran out of path in {constant_path_stack:?}")
                     }
-                }
-                entries.push((name.clone(), file));
-                Ok(None)
-            }
-            (_entry, &[_name]) => bail!("can't overwrite, containing level was not a directory"),
-            // local paths (".." not supported)
-            (TestFs::Dir(entries), &[next_comp, ..]) if next_comp == "." => {
-                return self.overwrite(&path[1..], file);
-            }
-            (TestFs::Dir(entries), &[next_comp, ..]) => {
-                // Recurse on the next element
+                    (TestFs::Dir(entries), &[name]) => {
+                        if name == "." {
+                            bail!("Overwrite {constant_path_stack:?}: Cannot overwrite '.'");
+                        }
+                        for (subpath, entry) in entries.iter_mut() {
+                            if subpath == name {
+                                let old = std::mem::replace(entry, file);
+                                return Ok(Some(old));
+                            }
+                        }
+                        entries.push((name.clone(), file));
+                        return Ok(None);
+                    }
+                    (_entry, &[_name]) => {
+                        bail!("Overwrite {constant_path_stack:?}: {curr_path:?} is not a directory")
+                    }
+                    // local paths (".." not supported)
+                    (TestFs::Dir(entries), &[next_comp, ..]) if next_comp == "." => {
+                        i += 1;
+                        continue;
+                    }
+                    // TODO '..' support here should now work
+                    (TestFs::Dir(entries), &[next_comp, ..]) => next_comp,
+                    (_, &[next_comp, ..]) => {
+                        bail!(
+                            "Overwrite {constant_path_stack:?}: At {curr_path:?} {i} that isn't a directory, tried to traverse into file {next_comp:?}"
+                        )
+                    }
+                };
+                // Recurse into the next directory
+                // We could probably do this inside the (TestFs::Dir(entries), &[next_comp, ..]) match
+                // IF we had polonius.
+                let entries = curr_fs.take_dir_entries();
                 for (subpath, entry) in entries.iter_mut() {
                     if subpath == next_comp {
-                        return entry.overwrite(&path[1..], file);
+                        i += 1;
+                        curr_fs = entry;
+                        continue 'walk;
                     }
                 }
-                bail!("can't overwrite, no such entry {next_comp} in directory")
+                bail!(
+                    "Overwrite {constant_path_stack:?}: At directory {curr_path:?} {i}, tried to find {next_comp:?} but it didn't exist"
+                )
             }
-            (_, &[next_comp, ..]) => {
-                bail!("tried to overwrite into {next_comp}, which is not a directory")
-            }
+            bail!("Mystery error");
         }
     }
 }
