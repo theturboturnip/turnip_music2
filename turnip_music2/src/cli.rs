@@ -529,6 +529,10 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
             self.fs.create_dir_all(path)?;
         }
 
+        // Generate m3u8s
+        // todo!("generate m3u8s");
+
+        // Generate music
         for cmd in ffmpeg_commands {
             self.fs.execute_ffmpeg(ffmpeg_path, cmd)?;
         }

@@ -162,7 +162,8 @@ pub struct ExportContext<F: Fs> {
     pub song_exports: Vec<ExportSong<F>>,
     /// title -> (m3u8_path, lib-relative song_paths)
     pub m3u8_exports: IndexMap<String, (F::PathBuf, Vec<F::PathBuf>)>,
-    all_outputs: HashSet<F::PathBuf>,
+    /// mapping of (charset-normalized path) -> (input paths)
+    all_outputs: HashMap<F::PathBuf, Vec<F::PathBuf>>,
 }
 impl<F: Fs> ExportContext<F> {
     fn new(config: user_defined::ExportConfig) -> Self {
@@ -172,7 +173,7 @@ impl<F: Fs> ExportContext<F> {
             folders_to_make: HashSet::new(),
             song_exports: vec![],
             m3u8_exports: IndexMap::new(),
-            all_outputs: HashSet::new(),
+            all_outputs: HashMap::new(),
         }
     }
 
@@ -180,22 +181,40 @@ impl<F: Fs> ExportContext<F> {
         &mut self,
         path: F::PathBuf,
         warner: &mut W,
+        is_folder: bool,
     ) {
-        let path = if self
+        let (normalized_path, input_path) = if self
             .config
             .target_charset
             .unwrap_or_default()
             .case_insensitive()
         {
-            path.map(|s| s.to_ascii_uppercase())
+            (path.map(|s| s.to_ascii_uppercase()), path)
         } else {
-            path
+            (path.clone(), path)
         };
         // TODO test duplicate output warnings
-        if self.all_outputs.contains(&path) {
-            warner.warn(Warning::DuplicateOutputFile { path });
+        // For now,
+        if let Some(prior_input_paths) = self.all_outputs.get_mut(&normalized_path) {
+            let should_warn = if prior_input_paths.contains(&input_path) {
+                // Do not warn anyone if this is a folder overlap.
+                // These are to be expected, unless this is a new overlap because of charset normalization
+                !is_folder
+            } else {
+                // This is a new overlap because of charset normalization
+                prior_input_paths.push(input_path.clone());
+                true
+            };
+
+            if should_warn {
+                // In all other cases
+                warner.warn(Warning::DuplicateOutputFile {
+                    path: input_path,
+                    normalized_path,
+                });
+            }
         } else {
-            self.all_outputs.insert(path);
+            self.all_outputs.insert(normalized_path, vec![input_path]);
         }
     }
 
@@ -281,13 +300,13 @@ impl<F: Fs> ExportContext<F> {
         );
         // Add it to the list of outputted files
         // TODO this shouldn't just be duplicates... for e.g. album paths they will be duplicated by definition
-        self.check_duplicate_file(output_dir.clone(), warner);
+        self.check_duplicate_file(output_dir.clone(), warner, true);
         self.folders_to_make.insert(output_dir.clone());
 
         // Handle deduplication for filename
         // Charsets have already been handled before constructing filename
         let output_file = output_dir.joined(&filename);
-        self.check_duplicate_file(output_file.clone(), warner);
+        self.check_duplicate_file(output_file.clone(), warner, false);
 
         if let Some(compilation_title) = in_compilation
             && self.config.compilation_mode.unwrap_or_default()

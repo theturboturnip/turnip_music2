@@ -1003,7 +1003,7 @@ mod export {
             }
         );
 
-        dbg!(export, fs);
+        dbg!(export, fs, warner);
         assert!(false);
     }
 

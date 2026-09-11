@@ -37,6 +37,7 @@ pub enum Warning<PathBuf: Clone + PartialEq + Eq> {
     },
     DuplicateOutputFile {
         path: PathBuf,
+        normalized_path: PathBuf,
     },
 }
 
