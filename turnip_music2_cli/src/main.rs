@@ -80,7 +80,14 @@ fn main() {
             Commands::Init {
                 search_paths,
                 generate_basic_exports,
-            } => ctx.init(search_paths, generate_basic_exports),
+            } => {
+                if search_paths.is_empty() {
+                    log::warn!(
+                        "No search paths provided! Supply them manually by writing to library.tm2.toml."
+                    )
+                }
+                ctx.init(search_paths, generate_basic_exports)
+            }
             Commands::ImportAlbum {
                 folders,
                 formats,

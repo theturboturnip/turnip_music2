@@ -5,7 +5,7 @@ use mp4ameta::ChplTimescale;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum NativeMusicExt {
     Mp3,
     Wav,

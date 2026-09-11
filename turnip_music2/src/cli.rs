@@ -132,7 +132,8 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                         target_format:vec![NativeMusicExt::Mp3],
                         reencode_params:None,
                         target_bitrate:Some(128),
-                        max_bitrate:Some(320),
+                        // max_bitrate:Some(320),
+                        max_bitrate:None,
                         output_structure: user_defined::FolderStructure::Albums,
                         target_charset: Some(user_defined::ExportCharset::Ntfs),
                         compilation_mode: Some(user_defined::CompilationMode::AsM3u8)
@@ -144,6 +145,14 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
         };
         let mut config_doc = toml_edit::ser::to_document(&config)?;
         config_doc.get_mut("library").unwrap().make_table_regular();
+        if let Some(exports) = config_doc.get_mut("exports") {
+            exports.make_table_regular();
+            let exports_table = exports.as_table_mut().unwrap();
+            exports_table.set_implicit(true);
+            for (key, entry) in exports_table.iter_mut() {
+                entry.make_table_regular();
+            }
+        }
         // TODO apply custom formatting
         self.fs.write_toml_file(&self.config_path, config_doc)?;
 

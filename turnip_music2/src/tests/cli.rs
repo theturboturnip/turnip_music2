@@ -130,6 +130,69 @@ search_paths = ["songs"]
             "should have produced orphaned songs warning"
         );
     }
+
+    #[test]
+    fn test_basic_init_with_exports() {
+        let mut fs = test_dir!(
+            (
+                "toplevel",
+                basic_test_hierarchy(
+                    test_dir!(
+                        ("basic", basic_unpadded_tracks()), //
+                    ),
+                    false,
+                )
+            ), //
+        );
+        let mut warner = vec![];
+
+        let library = || -> anyhow::Result<Option<Library<_>>> {
+            let mut ctx = CliContext::new(
+                Some(s!("toplevel/custom_library.toml")),
+                &mut fs,
+                &mut warner,
+            );
+            ctx.init(vec![s!("songs")], true)?;
+            Ok(ctx.loaded_library)
+        }();
+
+        assert_matches!(
+            fs.traverse(test_path!("toplevel", "custom_library.toml")),
+            Ok(TestFs::TextFile(t)) if t ==
+r#"[library]
+search_paths = ["songs"]
+
+[exports.mp3]
+output_path = "output"
+output_structure = "albums"
+target_format = ["mp3"]
+target_bitrate = 128
+target_charset = "ntfs"
+compilation_mode = "as_m3u8"
+"#,
+            "Library config should be correct"
+        );
+        assert_matches!(library, Ok(None), "shouldn't have loaded library");
+        assert_eq!(
+            warner,
+            vec![Warning::OrphanedSongs {
+                folder: test_path!("toplevel", "songs", "basic"),
+                files: vec![
+                    test_path!("toplevel", "songs", "basic", "1-The Biggest Fish.wav"),
+                    test_path!("toplevel", "songs", "basic", "2-The Next Biggest Fish.wav"),
+                    test_path!(
+                        "toplevel",
+                        "songs",
+                        "basic",
+                        "11-Fish to the Twenty-First Order.wav"
+                    ),
+                ],
+            }],
+            "should have produced orphaned songs warning"
+        );
+    }
+
+    // TODO test warnings for no-search-path-provided
 }
 
 mod import {

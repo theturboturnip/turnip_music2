@@ -30,7 +30,7 @@ impl ConfigFile {
 
 /// TODO this should ban Unicode control characters
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum ExportCharset {
     /// UTF-8 encoding.
     /// No substitutions.
@@ -78,7 +78,7 @@ impl ExportCharset {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum CompilationMode {
     /// Export all constituent songs normally, and generate .m3u8 files at the root of the output that point to them.
     #[default]
@@ -91,7 +91,7 @@ pub enum CompilationMode {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum FolderStructure {
     /// `album/song`
     #[default]
