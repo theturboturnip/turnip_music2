@@ -4,7 +4,7 @@ use std::{
     hash::Hash,
 };
 
-use anyhow::bail;
+use anyhow::{Context, bail};
 use subprocess::Exec;
 
 use crate::{
@@ -180,15 +180,17 @@ impl Fs for StdFs {
         &self,
         path: P,
     ) -> anyhow::Result<(toml_edit::DocumentMut, ConfigFile)> {
-        let data = std::fs::read_to_string(path)?;
+        let data = std::fs::read_to_string(path.as_ref())?;
         ConfigFile::from_str(&data)
+            .with_context(|| format!("Parsing config file at {:?}", path.as_ref()))
     }
     fn parse_group_file<P: AsRef<Self::Path>>(
         &self,
         path: P,
     ) -> anyhow::Result<(toml_edit::DocumentMut, GroupFile)> {
-        let data = std::fs::read_to_string(path)?;
+        let data = std::fs::read_to_string(path.as_ref())?;
         GroupFile::from_str(&data)
+            .with_context(|| format!("Parsing group file at {:?}", path.as_ref()))
     }
 
     fn write_toml_file<P: AsRef<Self::Path>>(
