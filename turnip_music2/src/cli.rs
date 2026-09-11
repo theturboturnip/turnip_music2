@@ -512,7 +512,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                 .write_toml_file(path.joined(user_defined::GroupFile::TOML_FILE_NAME), doc)?
         }
 
-        self.rescan_library(OrphanedMode::ShowOrphaned)?;
+        self.reload_library(OrphanedMode::ShowOrphaned)?;
 
         Ok(())
     }

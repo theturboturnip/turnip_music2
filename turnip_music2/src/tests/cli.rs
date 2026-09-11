@@ -219,7 +219,6 @@ mod import {
 
         let library = || -> anyhow::Result<Option<Library<_>>> {
             let mut ctx = CliContext::new(None, &mut fs, &mut warner);
-            ctx.reload_library(OrphanedMode::IgnoreOrphaned)?;
             ctx.import(
                 // Add souvenir first, to check that the groups are sorted afterwards
                 &vec![s!("songs/souvenir"), s!("songs/oddfuture")],
@@ -433,7 +432,6 @@ title = "Track 4"
 
         let library = || -> anyhow::Result<Option<Library<_>>> {
             let mut ctx = CliContext::new(None, &mut fs, &mut warner);
-            ctx.reload_library(OrphanedMode::IgnoreOrphaned)?;
             ctx.import(
                 &vec![s!("songs/unpadded"), s!("songs/zeropadded")],
                 None,
@@ -623,7 +621,6 @@ title = "11-Fish to the Twenty-First Order"
 
         let library = || -> anyhow::Result<Option<Library<_>>> {
             let mut ctx = CliContext::new(None, &mut fs, &mut warner);
-            ctx.reload_library(OrphanedMode::IgnoreOrphaned)?;
             ctx.import(
                 &vec![s!("songs/deltarune")],
                 None,
@@ -739,7 +736,6 @@ track = 39
 
         let library = || -> anyhow::Result<Option<Library<_>>> {
             let mut ctx = CliContext::new(None, &mut fs, &mut warner);
-            ctx.reload_library(OrphanedMode::IgnoreOrphaned)?;
             ctx.import(
                 &vec![s!("songs/deltarune")],
                 None,
@@ -853,7 +849,6 @@ title = "Toby Fox - DELTARUNE Chapter 1 OST - 02 Beginning"
 
         let library = || -> anyhow::Result<Option<Library<_>>> {
             let mut ctx = CliContext::new(None, &mut fs, &mut warner);
-            ctx.reload_library(OrphanedMode::IgnoreOrphaned)?;
             ctx.import(
                 &vec![s!("songs/Big Anime Compilation")],
                 None,

@@ -95,7 +95,6 @@ fn main() {
                 // formats,
                 native_metadata,
             } => || -> anyhow::Result<()> {
-                ctx.reload_library(OrphanedMode::IgnoreOrphaned)?;
                 ctx.import(
                     &folders,
                     None, // formats.as_ref().map(|fs| fs.as_slice()),
@@ -108,7 +107,6 @@ fn main() {
                 // formats,
                 native_metadata,
             } => || -> anyhow::Result<()> {
-                ctx.reload_library(OrphanedMode::IgnoreOrphaned)?;
                 ctx.import(
                     &folders,
                     None, // formats.as_ref().map(|fs| fs.as_slice()),
