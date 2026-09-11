@@ -374,10 +374,10 @@ impl<F: Fs> ExportContext<F> {
         let mut push_metadata = |key: &str, value: &str| -> () {
             args.push("-metadata".to_os_string());
             if !value.contains('"') {
-                args.push(format!("{key}=\"{value}\"").to_os_string());
+                args.push(format!("{key}={value}").to_os_string());
             } else {
-                let value = value.replace("\"", "\\\"");
-                args.push(format!("{key}=\"{value}\"").to_os_string());
+                // let value = value.replace("\"", "\\\"");
+                args.push(format!("{key}={value}").to_os_string());
             }
         };
         // TODO configurable mode for concatenating artists together or putting multiple tags?
