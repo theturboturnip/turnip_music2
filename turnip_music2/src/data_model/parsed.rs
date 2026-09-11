@@ -181,6 +181,8 @@ impl AlbumFileMeta {
             meta_disc = *curr_disc;
         }
 
+        // TODO all of this behaviour should affect or carry through num_tracks, num_discs
+
         let meta_track = match f.track {
             Some(t) => {
                 *curr_track = t;
