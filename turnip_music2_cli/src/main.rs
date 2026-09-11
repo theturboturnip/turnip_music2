@@ -112,6 +112,7 @@ fn main() {
             Commands::Edit { .. } => todo!(),
             // Run internal closure to allow bailing if the first step fails
             Commands::Export { config, ffmpeg } => || -> anyhow::Result<()> {
+                ctx.reload_library()?;
                 let export = ctx.prep_export(&config)?;
 
                 let ffmpeg_path = match ffmpeg {
