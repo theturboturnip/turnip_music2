@@ -263,3 +263,6 @@ pub struct AlbumGlobalMeta {
     pub disc: Option<u64>,
     pub num_tracks: Option<u64>,
 }
+
+/// When found in a directory, turnip_music2 will always pretend that directory contains nothing to scan, and will not recurse into subdirectories.
+pub const IGNORE_SENTINEL_FILE: &str = "ignore.tm2";

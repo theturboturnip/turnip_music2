@@ -25,6 +25,7 @@ pub enum OrphanedMode {
 
 pub fn scan_dir<F: Fs>(fs: &F, dir: &F::Path) -> anyhow::Result<ScannedDir<F>> {
     let group_file_name = OsStr::new(user_defined::GroupFile::TOML_FILE_NAME);
+    let ignore_sentinel_file = OsStr::new(user_defined::IGNORE_SENTINEL_FILE);
 
     // let mut files = vec![];
     let mut dirs = vec![];
@@ -37,6 +38,13 @@ pub fn scan_dir<F: Fs>(fs: &F, dir: &F::Path) -> anyhow::Result<ScannedDir<F>> {
         if fs.is_dir(&path) {
             dirs.push(path);
         } else if fs.is_file(&path) {
+            if fs.path_trailing(path.as_ref()) == Some(ignore_sentinel_file) {
+                return Ok(ScannedDir {
+                    group_file: None,
+                    all_music_files: vec![],
+                    dirs: vec![],
+                });
+            }
             if fs.path_trailing(path.as_ref()) == Some(group_file_name) {
                 group = Some(path);
                 continue;
@@ -107,3 +115,5 @@ pub fn scan_library<F: Fs, W: WarningSender<F::PathBuf>>(
         )
         .collect::<Result<Vec<_>, _>>()
 }
+
+// TODO test ignore.tm2 behaviour
