@@ -116,7 +116,7 @@ impl Default for NativeMetadata {
 impl NativeMetadataFormat {
     pub fn parse_from_file(
         path: &Path,
-    ) -> anyhow::Result<(Option<NativeMusicExt>, NativeMetadata)> {
+    ) -> std::io::Result<(Option<NativeMusicExt>, NativeMetadata)> {
         // TODO more robust detection could use e.g. Symphonia
         let ext: Option<NativeMusicExt> = path
             .extension()
@@ -128,9 +128,8 @@ impl NativeMetadataFormat {
 
         let meta = match fmt {
             NativeMetadataFormat::None => NativeMetadata::default(),
-            NativeMetadataFormat::Id3 => {
-                let tag = id3::Tag::read_from_path(&path)?;
-                NativeMetadata {
+            NativeMetadataFormat::Id3 => match id3::Tag::read_from_path(&path) {
+                Ok(tag) => NativeMetadata {
                     fmt,
                     title: tag.title().map(str::to_string),
                     album: tag.album().map(str::to_string),
@@ -151,21 +150,28 @@ impl NativeMetadataFormat {
                         .into_iter()
                         .map(|s| s.to_string())
                         .collect(),
-                }
-            }
-            NativeMetadataFormat::M4a => {
-                let mut tag = mp4ameta::Tag::read_with_path(
-                    &path,
-                    &mp4ameta::ReadConfig {
-                        read_meta_items: true,
-                        read_image_data: false,
-                        read_chapter_list: false,
-                        read_chapter_track: false,
-                        read_audio_info: true,
-                        chpl_timescale: ChplTimescale::DEFAULT,
-                    },
-                )?;
-                NativeMetadata {
+                },
+                Err(id3::Error {
+                    kind: id3::ErrorKind::Io(io),
+                    ..
+                }) => Err(io)?,
+                _ => NativeMetadata {
+                    fmt,
+                    ..Default::default()
+                },
+            },
+            NativeMetadataFormat::M4a => match mp4ameta::Tag::read_with_path(
+                &path,
+                &mp4ameta::ReadConfig {
+                    read_meta_items: true,
+                    read_image_data: false,
+                    read_chapter_list: false,
+                    read_chapter_track: false,
+                    read_audio_info: true,
+                    chpl_timescale: ChplTimescale::DEFAULT,
+                },
+            ) {
+                Ok(mut tag) => NativeMetadata {
                     fmt,
                     title: tag.take_title(),
                     // TODO take_title_sort_order
@@ -180,109 +186,127 @@ impl NativeMetadataFormat {
                     num_tracks: tag.track().1.map(Into::into),
                     track: tag.track().0.map(Into::into),
                     genres: tag.genres().map(str::to_string).collect(),
-                }
-            }
-            NativeMetadataFormat::Flac => {
-                let tag = metaflac::Tag::read_from_path(&path)?;
-
-                // <https://datatracker.ietf.org/doc/rfc9639/>
-                // <https://xiph.org/vorbis/doc/v-comment.html>
-                // <https://taglib.org/api/p_propertymapping.html>
-                // TODO include musicbrainz tags?
-                // e.g.
-                // Title            Dance!
-                // Artist           ATLUS
-                // Album            PERSONA4 DANCING ALL NIGHT Original Soundtrack Disc3
-                // TrackNumber      1/17
-                let title = tag
-                    .get_vorbis("title")
-                    .map(|iter| iter.last().map(str::to_owned))
-                    .flatten();
-                // TODO include Version? or keep that separate
-                let album = tag
-                    .get_vorbis("album")
-                    .map(|iter| iter.last().map(str::to_owned))
-                    .flatten();
-                let album_artists = tag
-                    .get_vorbis("albumartist")
-                    .into_iter()
-                    .flat_map(|iter| iter.map(str::to_owned))
-                    .collect::<Vec<_>>();
-                let artists = tag
-                    .get_vorbis("artist")
-                    .into_iter()
-                    .flat_map(|iter| iter.map(str::to_owned))
-                    .collect::<Vec<_>>();
-                let genres = tag
-                    .get_vorbis("genre")
-                    .into_iter()
-                    .flat_map(|iter| iter.map(str::to_owned))
-                    .collect::<Vec<_>>();
-
-                let track_disc_num_regex =
-                    regex::Regex::new(r"(\d+)(/(\d+))?").expect("regex must never fail");
-
-                let disc_number_str = tag
-                    .get_vorbis("discnumber")
-                    .map(|iter| iter.last()) // NOT to_owned, don't need that
-                    .flatten()
-                    .unwrap_or_default();
-                let (disc, num_discs) = {
-                    match track_disc_num_regex.captures(disc_number_str) {
-                        Some(cs) => {
-                            let idx = cs
-                                .get(1)
-                                .expect("can't match regex without first group")
-                                .as_str()
-                                .parse::<u64>()?;
-                            let num = match cs.get(3) {
-                                Some(m) => Some(m.as_str().parse::<u64>()?),
-                                None => None,
-                            };
-
-                            (Some(idx), num)
-                        }
-                        None => (None, None),
-                    }
-                };
-
-                let track_number_str = tag
-                    .get_vorbis("tracknumber")
-                    .map(|iter| iter.last()) // NOT to_owned, don't need that
-                    .flatten()
-                    .unwrap_or_default();
-                let (track, num_tracks) = {
-                    match track_disc_num_regex.captures(track_number_str) {
-                        Some(cs) => {
-                            let idx = cs
-                                .get(1)
-                                .expect("can't match regex without first group")
-                                .as_str()
-                                .parse::<u64>()?;
-                            let num = match cs.get(3) {
-                                Some(m) => Some(m.as_str().parse::<u64>()?),
-                                None => None,
-                            };
-
-                            (Some(idx), num)
-                        }
-                        None => (None, None),
-                    }
-                };
-
-                NativeMetadata {
+                },
+                Err(mp4ameta::Error {
+                    kind: mp4ameta::ErrorKind::Io(io),
+                    ..
+                }) => Err(io)?,
+                _ => NativeMetadata {
                     fmt,
-                    title,
-                    album,
-                    album_artists,
-                    artists,
-                    num_discs,
-                    disc,
-                    num_tracks,
-                    track,
-                    genres,
+                    ..Default::default()
+                },
+            },
+            NativeMetadataFormat::Flac => match metaflac::Tag::read_from_path(&path) {
+                Ok(tag) => {
+                    // <https://datatracker.ietf.org/doc/rfc9639/>
+                    // <https://xiph.org/vorbis/doc/v-comment.html>
+                    // <https://taglib.org/api/p_propertymapping.html>
+                    // TODO include musicbrainz tags?
+                    // e.g.
+                    // Title            Dance!
+                    // Artist           ATLUS
+                    // Album            PERSONA4 DANCING ALL NIGHT Original Soundtrack Disc3
+                    // TrackNumber      1/17
+                    let title = tag
+                        .get_vorbis("title")
+                        .map(|iter| iter.last().map(str::to_owned))
+                        .flatten();
+                    // TODO include Version? or keep that separate
+                    let album = tag
+                        .get_vorbis("album")
+                        .map(|iter| iter.last().map(str::to_owned))
+                        .flatten();
+                    let album_artists = tag
+                        .get_vorbis("albumartist")
+                        .into_iter()
+                        .flat_map(|iter| iter.map(str::to_owned))
+                        .collect::<Vec<_>>();
+                    let artists = tag
+                        .get_vorbis("artist")
+                        .into_iter()
+                        .flat_map(|iter| iter.map(str::to_owned))
+                        .collect::<Vec<_>>();
+                    let genres = tag
+                        .get_vorbis("genre")
+                        .into_iter()
+                        .flat_map(|iter| iter.map(str::to_owned))
+                        .collect::<Vec<_>>();
+
+                    let track_disc_num_regex =
+                        regex::Regex::new(r"(\d+)(/(\d+))?").expect("regex must never fail");
+
+                    let disc_number_str = tag
+                        .get_vorbis("discnumber")
+                        .map(|iter| iter.last()) // NOT to_owned, don't need that
+                        .flatten()
+                        .unwrap_or_default();
+                    let (disc, num_discs) = {
+                        match track_disc_num_regex.captures(disc_number_str) {
+                            Some(cs) => {
+                                let idx = cs
+                                    .get(1)
+                                    .expect("can't match regex without first group")
+                                    .as_str()
+                                    .parse::<u64>()
+                                    .ok();
+                                let num = match cs.get(3) {
+                                    Some(m) => m.as_str().parse::<u64>().ok(),
+                                    None => None,
+                                };
+
+                                (idx, num)
+                            }
+                            None => (None, None),
+                        }
+                    };
+
+                    let track_number_str = tag
+                        .get_vorbis("tracknumber")
+                        .map(|iter| iter.last()) // NOT to_owned, don't need that
+                        .flatten()
+                        .unwrap_or_default();
+                    let (track, num_tracks) = {
+                        match track_disc_num_regex.captures(track_number_str) {
+                            Some(cs) => {
+                                let idx = cs
+                                    .get(1)
+                                    .expect("can't match regex without first group")
+                                    .as_str()
+                                    .parse::<u64>()
+                                    .ok();
+                                let num = match cs.get(3) {
+                                    Some(m) => m.as_str().parse::<u64>().ok(),
+                                    None => None,
+                                };
+
+                                (idx, num)
+                            }
+                            None => (None, None),
+                        }
+                    };
+
+                    NativeMetadata {
+                        fmt,
+                        title,
+                        album,
+                        album_artists,
+                        artists,
+                        num_discs,
+                        disc,
+                        num_tracks,
+                        track,
+                        genres,
+                    }
                 }
-            }
+                Err(metaflac::Error {
+                    kind: metaflac::ErrorKind::Io(io),
+                    ..
+                }) => Err(io)?,
+                _ => NativeMetadata {
+                    fmt,
+                    ..Default::default()
+                },
+            },
         };
         Ok((ext, meta))
     }
