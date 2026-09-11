@@ -40,6 +40,7 @@ pub trait Fs {
     ) -> anyhow::Result<impl Iterator<Item = anyhow::Result<Self::PathBuf>>>;
 
     // TODO these should be FsPathBuf or FsPath
+    fn path_stringify<'p>(&self, path: &'p Self::Path) -> String;
     fn path_trailing<'p>(&self, path: &'p Self::Path) -> Option<&'p OsStr>;
     fn path_ext<'p>(&self, path: &'p Self::Path) -> Option<&'p OsStr>;
     fn path_parent_dir<'p>(&self, path: &'p Self::Path) -> Option<Self::PathBuf>;
@@ -70,6 +71,12 @@ pub trait Fs {
         &mut self,
         path: P,
         doc: toml_edit::DocumentMut,
+    ) -> anyhow::Result<()>;
+
+    fn write_text_file<P: AsRef<Self::Path>>(
+        &mut self,
+        path: P,
+        contents: String,
     ) -> anyhow::Result<()>;
 
     /// `mkdir -p` equivalent. In StdFs, maps to [std::fs::create_dir_all].
@@ -136,6 +143,12 @@ impl Fs for StdFs {
         path.as_ref().is_dir()
     }
 
+    fn path_stringify<'p>(&self, path: &'p Self::Path) -> String {
+        path.to_str()
+            .expect("turnip_music2 only supports unicode paths")
+            .to_owned()
+    }
+
     fn path_trailing<'p>(&self, path: &'p Self::Path) -> Option<&'p OsStr> {
         path.file_name()
     }
@@ -186,6 +199,19 @@ impl Fs for StdFs {
             log::info!("Write to path {:?}: \n{}", path.as_ref(), doc.to_string());
         } else {
             std::fs::write(path.as_ref(), doc.to_string().as_bytes())?;
+        }
+        Ok(())
+    }
+
+    fn write_text_file<P: AsRef<Self::Path>>(
+        &mut self,
+        path: P,
+        contents: String,
+    ) -> anyhow::Result<()> {
+        if self.dry_run {
+            log::info!("Write to path {:?}: \n{}", path.as_ref(), &contents);
+        } else {
+            std::fs::write(path.as_ref(), contents.as_bytes())?;
         }
         Ok(())
     }

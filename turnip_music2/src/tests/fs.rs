@@ -244,6 +244,10 @@ impl Fs for TestFs {
         }
     }
 
+    fn path_stringify<'p>(&self, path: &'p Self::Path) -> String {
+        // TODO need some handling of escaping and stuff
+        path.join("/")
+    }
     fn path_trailing<'p>(&self, path: &'p Self::Path) -> Option<&'p OsStr> {
         path.as_ref().last().map(|comp| OsStr::new(comp))
     }
@@ -345,6 +349,25 @@ impl Fs for TestFs {
         {
             panic!(
                 "write_toml_file overwrote a {:?} at {:?} - likely unintended",
+                overwritten,
+                path.as_ref()
+            );
+        }
+        Ok(())
+    }
+
+    fn write_text_file<P: AsRef<Self::Path>>(
+        &mut self,
+        path: P,
+        contents: String,
+    ) -> anyhow::Result<()> {
+        let string = contents;
+        let overwritten = self.overwrite(path.as_ref(), TestFs::TextFile(string))?;
+        if let Some(overwritten) = overwritten
+            && !matches!(overwritten, TestFs::TextFile(..))
+        {
+            panic!(
+                "write_text_file overwrote a {:?} at {:?} - likely unintended",
                 overwritten,
                 path.as_ref()
             );

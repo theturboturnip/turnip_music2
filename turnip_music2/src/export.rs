@@ -160,7 +160,7 @@ pub struct ExportContext<F: Fs> {
     pub folders_to_make: HashSet<F::PathBuf>,
     /// lib-relative input_path, inputlib-relative output_path, outputoutput metadata
     pub song_exports: Vec<ExportSong<F>>,
-    /// title -> (m3u8_path, lib-relative song_paths)
+    /// title -> (output-dir-relative m3u8_path, output-dir-relative song_paths)
     pub m3u8_exports: IndexMap<String, (F::PathBuf, Vec<F::PathBuf>)>,
     /// mapping of (charset-normalized path) -> (input paths)
     all_outputs: HashMap<F::PathBuf, Vec<F::PathBuf>>,

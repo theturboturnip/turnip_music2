@@ -1,4 +1,4 @@
-use std::{collections::HashSet, ffi::OsStr};
+use std::{collections::HashSet, ffi::OsStr, fmt::Write};
 
 use crate::{
     data_model::{
@@ -530,7 +530,25 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
         }
 
         // Generate m3u8s
-        // todo!("generate m3u8s");
+        for (name, (path, songs)) in export.m3u8_exports {
+            // Wikipedia says
+            // - some things don't support \r\n
+            // - the #PLAYLIST directive exists in "Extended M3U" - I want to have this info, might as well format it like this even if no one reads it right
+            let mut contents = format!("#EXTM3U\r\n#PLAYLIST:{name}\r\n");
+            for song in songs {
+                write!(
+                    &mut contents,
+                    "{}\r\n",
+                    // Directly write the path in, we assume the M3U8 path is always at the same top-level as the output_dir
+                    // so the song path will effectively be interpreted as output_dir-relative
+                    self.fs.path_stringify(&song.as_ref())
+                )
+                .expect("m3u8 write! failed somehow");
+            }
+
+            self.fs
+                .write_text_file(output_dir.clone().plus(path.as_ref()), contents)?;
+        }
 
         // Generate music
         for cmd in ffmpeg_commands {
