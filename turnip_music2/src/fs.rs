@@ -174,7 +174,8 @@ impl Fs for StdFs {
         &self,
         path: P,
     ) -> anyhow::Result<(Option<NativeMusicExt>, NativeMetadata)> {
-        Ok(NativeMetadataFormat::parse_from_file(path.as_ref())?)
+        NativeMetadataFormat::parse_from_file(path.as_ref())
+            .with_context(|| format!("Parsing native metadata from {:?}", path.as_ref()))
     }
     fn parse_config_file<P: AsRef<Self::Path>>(
         &self,
