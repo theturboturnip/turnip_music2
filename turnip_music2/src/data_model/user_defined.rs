@@ -171,7 +171,7 @@ pub enum GroupFile {
         origin: Origin,
         album_art: Option<String>,
         global: AlbumGlobalMeta,
-        #[serde(default)]
+        #[serde(default)] // TODO warn when no songs!
         files: IndexMap<String, AlbumFileMeta>,
     },
 }

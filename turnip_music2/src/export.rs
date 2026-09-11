@@ -539,7 +539,9 @@ impl<F: Fs> ExportContext<F> {
             }
         }
 
-        // Finally, output
+        // Finally, output.
+        // Always overwrite
+        args.push("-y".to_os_string());
         args.push(
             output_prefix
                 .clone()
