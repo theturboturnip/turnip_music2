@@ -265,10 +265,34 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
 
             let group_file = match mode {
                 ImportMode::Album => {
-                    // Sort by disc_idx, track_idx, and otherwise by a parsed form of the title
-                    relevant_songs.sort_by_cached_key(|(title, meta)| {
-                        (meta.disc, meta.track, TitleSortKey::parse_from(title))
-                    });
+                    // Metadata may be malformed.
+                    // e.g. track_idx may be present but disc_idx may not.
+                    // Attempt to detect this case by checking if dupe track numbers show up for None disc.
+                    // In that case, don't sort by (disc_idx, track_idx) - just sort by title
+                    let has_broken_disctrack_info = {
+                        let mut has_dupe = false;
+                        let mut seen_disctrack = HashSet::new();
+                        for (_title, meta) in relevant_songs.iter() {
+                            let disctrack = (meta.disc, meta.track);
+                            if seen_disctrack.contains(&disctrack) {
+                                has_dupe = true;
+                                break;
+                            } else {
+                                seen_disctrack.insert(disctrack);
+                            }
+                        }
+                        has_dupe
+                    };
+
+                    if has_broken_disctrack_info {
+                        relevant_songs
+                            .sort_by_cached_key(|(title, _meta)| TitleSortKey::parse_from(title));
+                    } else {
+                        // Sort by disc_idx, track_idx, and otherwise by a parsed form of the title
+                        relevant_songs.sort_by_cached_key(|(title, meta)| {
+                            (meta.disc, meta.track, TitleSortKey::parse_from(title))
+                        });
+                    }
 
                     // Get globals
 

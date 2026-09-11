@@ -30,7 +30,7 @@ impl TitleSortKey {
                         // Limit number of digits to parse
                         Some(_) => 18,
                     };
-                    let digit: i64 = dbg!(&digit_start[..digit_len])
+                    let digit: i64 = digit_start[..digit_len]
                         .parse()
                         .expect("Up to 18 numerical digits will always be parseable into i64");
                     v.push((prefix, digit));
@@ -100,6 +100,33 @@ fn test_title_sort_key_sorting() {
             "A0",
             "Android 18 - Bug Song",
             "Android Attack",
+        ]
+    );
+}
+
+#[cfg(test)]
+#[test]
+fn test_title_sort_key_sorting_real() {
+    let mut keys = vec![
+        "disc1_01.mp3",
+        "disc1_02.mp3",
+        "disc1_03.mp3",
+        "disc1_04.mp3",
+        "disc2_01.mp3",
+        "disc2_02.mp3",
+        "disc2_03.mp3",
+    ];
+    keys.sort_by_cached_key(|s| TitleSortKey::parse_from(*s));
+    assert_eq!(
+        keys,
+        vec![
+            "disc1_01.mp3",
+            "disc1_02.mp3",
+            "disc1_03.mp3",
+            "disc1_04.mp3",
+            "disc2_01.mp3",
+            "disc2_02.mp3",
+            "disc2_03.mp3",
         ]
     );
 }
