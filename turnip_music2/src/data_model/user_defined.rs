@@ -164,12 +164,14 @@ pub enum GroupFile {
         origin: Origin,
         title: String, // TODO use a tag system or something
         global: CompilationGlobalMeta,
+        #[serde(default)]
         files: IndexMap<String, CompilationFileMeta>,
     },
     Album {
         origin: Origin,
         album_art: Option<String>,
         global: AlbumGlobalMeta,
+        #[serde(default)]
         files: IndexMap<String, AlbumFileMeta>,
     },
 }
