@@ -14,6 +14,7 @@ use crate::{
 };
 use anyhow::{anyhow, bail};
 use indexmap::IndexMap;
+use indicatif::ProgressBar;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImportMode {
@@ -591,9 +592,13 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
         }
 
         // Generate music
+
+        let bar = ProgressBar::new(ffmpeg_commands.len() as u64);
         for cmd in ffmpeg_commands {
             self.fs.execute_ffmpeg(ffmpeg_path, cmd)?;
+            bar.inc(1);
         }
+        bar.finish();
 
         Ok(())
     }

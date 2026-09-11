@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, bail};
-use subprocess::Exec;
+use subprocess::{Exec, Redirection};
 
 use crate::{
     data_model::{
@@ -230,7 +230,12 @@ impl Fs for StdFs {
             log::info!("Execute {ffmpeg_path:?} {:?}", args.0);
         } else {
             // TODO check this provides output, add a bool to StdFs to prevent it...
-            let exit = Exec::cmd(ffmpeg_path).args(&args.0).join()?;
+            let exit = Exec::cmd(ffmpeg_path)
+                .args(&args.0)
+                .stdin([])
+                .stdout(Redirection::Null)
+                .stderr(Redirection::Null)
+                .join()?;
             if !exit.success() {
                 // TODO use a warner for this
                 bail!("ffmpeg command failed {:?} {:?}", ffmpeg_path, args.0);
