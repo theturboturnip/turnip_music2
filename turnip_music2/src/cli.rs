@@ -185,6 +185,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
         for f in folders {
             let path = F::PathBuf::parse_path_from_user_str(f);
             let s = scan_dir(self.fs, path.as_ref())?;
+            dbg!(&s);
 
             if let Some(path) = s.group_file {
                 // TODO recommend the user call an 'update' function instead

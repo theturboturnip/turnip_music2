@@ -2,8 +2,8 @@ use turnip_music2::warning::{Warning, WarningSender};
 
 #[derive(Debug)]
 pub struct WarningLogger();
-impl<PathBuf: Clone + PartialEq + Eq + std::fmt::Debug> WarningSender<PathBuf> for WarningLogger {
-    fn warn(&mut self, w: Warning<PathBuf>) {
+impl WarningSender<std::path::PathBuf> for WarningLogger {
+    fn warn(&mut self, w: Warning<std::path::PathBuf>) {
         match &w {
             Warning::LibraryTomlParseFail { .. }
             | Warning::GroupTomlParseFail { .. }
@@ -12,7 +12,10 @@ impl<PathBuf: Clone + PartialEq + Eq + std::fmt::Debug> WarningSender<PathBuf> f
                 => {
                 log::error!("{w:?}")
             }
-            Warning::OrphanedSongs { .. } | Warning::CompilationMayBeAnAlbum { .. } | Warning::AlbumMayBeACompilation { .. } | Warning::DuplicateOutputFile { .. } => log::warn!("{w:?}"),
+            Warning::OrphanedSongs { folder, .. } => {
+                log::warn!("Orphaned Songs in {folder:?}")
+            }
+            Warning::CompilationMayBeAnAlbum { .. } | Warning::AlbumMayBeACompilation { .. } | Warning::DuplicateOutputFile { .. } => log::warn!("{w:?}"),
         }
     }
 }

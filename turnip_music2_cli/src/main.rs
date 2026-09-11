@@ -35,7 +35,7 @@ pub enum Commands {
     /// Creates an album group file for a given folder with source songs.
     ImportAlbum {
         folders: Vec<String>,
-        formats: Option<Vec<String>>,
+        // formats: Option<Vec<String>>,
         #[arg(long, default_value_t = true)]
         native_metadata: bool,
         // TODO integrate album global metadata?
@@ -43,7 +43,7 @@ pub enum Commands {
     /// Creates a compilation group file for a given folder with source songs.
     ImportCompilation {
         folders: Vec<String>,
-        formats: Option<Vec<String>>,
+        // formats: Option<Vec<String>>,
         #[arg(long, default_value_t = true)]
         native_metadata: bool,
         // TODO integrate compilation global metadata?
@@ -51,7 +51,7 @@ pub enum Commands {
     /// Scans all folders with existing group files, if there are new files that adhere to the formats, add them to the TOML
     Update {
         folders: Vec<String>,
-        formats: Option<Vec<String>>,
+        // formats: Option<Vec<String>>,
         #[arg(long, default_value_t = true)]
         native_metadata: bool,
     },
@@ -66,6 +66,7 @@ pub enum Commands {
 }
 
 fn main() {
+    unsafe { std::env::set_var("TURNIP_MUSIC_LOG", "info") };
     pretty_env_logger::init_custom_env("TURNIP_MUSIC_LOG");
 
     let cli = Cli::parse();
@@ -91,26 +92,26 @@ fn main() {
             }
             Commands::ImportAlbum {
                 folders,
-                formats,
+                // formats,
                 native_metadata,
             } => || -> anyhow::Result<()> {
                 ctx.reload_library(OrphanedMode::IgnoreOrphaned)?;
                 ctx.import(
                     &folders,
-                    formats.as_ref().map(|fs| fs.as_slice()),
+                    None, // formats.as_ref().map(|fs| fs.as_slice()),
                     native_metadata,
                     ImportMode::Album,
                 )
             }(),
             Commands::ImportCompilation {
                 folders,
-                formats,
+                // formats,
                 native_metadata,
             } => || -> anyhow::Result<()> {
                 ctx.reload_library(OrphanedMode::IgnoreOrphaned)?;
                 ctx.import(
                     &folders,
-                    formats.as_ref().map(|fs| fs.as_slice()),
+                    None, // formats.as_ref().map(|fs| fs.as_slice()),
                     native_metadata,
                     ImportMode::Compilation,
                 )

@@ -10,6 +10,7 @@ pub struct Group<F: Fs> {
     pub parsed: parsed::GroupFile<F>,
 }
 
+#[derive(Debug)]
 pub struct ScannedDir<F: Fs> {
     pub group_file: Option<F::PathBuf>,
     pub all_music_files: Vec<F::PathBuf>,

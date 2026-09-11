@@ -30,7 +30,7 @@ pub trait FsPathBuf<Path: ?Sized>:
 }
 
 /// Minimal trait encoding only the necessary components of a filesystem scanner.
-pub trait Fs {
+pub trait Fs: Debug {
     type Path: ?Sized + ToOwned<Owned = Self::PathBuf> + AsRef<Self::Path>;
     type PathBuf: FsPathBuf<Self::Path>;
 
@@ -87,6 +87,7 @@ pub trait Fs {
     fn execute_ffmpeg(&mut self, ffmpeg_path: &OsStr, args: FfmpegArgs) -> anyhow::Result<()>;
 }
 
+#[derive(Debug)]
 pub struct StdFs {
     pub dry_run: bool,
 }

@@ -30,7 +30,7 @@ impl TitleSortKey {
                         // Limit number of digits to parse
                         Some(_) => 18,
                     };
-                    let digit: i64 = digit_start[..digit_len]
+                    let digit: i64 = dbg!(&digit_start[..digit_len])
                         .parse()
                         .expect("Up to 18 numerical digits will always be parseable into i64");
                     v.push((prefix, digit));
@@ -73,6 +73,11 @@ fn test_title_sort_key() {
     assert_eq!(
         TitleSortKey::parse_from("A000000000"),
         TitleSortKey(vec![(s!("A"), 0)])
+    );
+
+    assert_eq!(
+        TitleSortKey::parse_from("12A"),
+        TitleSortKey(vec![(s!(""), 12), (s!("A"), -1)])
     );
 }
 

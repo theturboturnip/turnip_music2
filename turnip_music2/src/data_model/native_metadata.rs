@@ -235,7 +235,7 @@ impl NativeMetadataFormat {
                                 .expect("can't match regex without first group")
                                 .as_str()
                                 .parse::<u64>()?;
-                            let num = match cs.get(2) {
+                            let num = match cs.get(3) {
                                 Some(m) => Some(m.as_str().parse::<u64>()?),
                                 None => None,
                             };
@@ -259,7 +259,7 @@ impl NativeMetadataFormat {
                                 .expect("can't match regex without first group")
                                 .as_str()
                                 .parse::<u64>()?;
-                            let num = match cs.get(2) {
+                            let num = match cs.get(3) {
                                 Some(m) => Some(m.as_str().parse::<u64>()?),
                                 None => None,
                             };
