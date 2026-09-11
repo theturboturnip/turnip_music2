@@ -16,6 +16,12 @@ pub struct ScannedDir<F: Fs> {
     pub dirs: Vec<F::PathBuf>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OrphanedMode {
+    IgnoreOrphaned,
+    ShowOrphaned,
+}
+
 pub fn scan_dir<F: Fs>(fs: &F, dir: &F::Path) -> anyhow::Result<ScannedDir<F>> {
     let group_file_name = OsStr::new(user_defined::GroupFile::TOML_FILE_NAME);
 
@@ -57,6 +63,7 @@ pub fn scan_library<F: Fs, W: WarningSender<F::PathBuf>>(
     fs: &F,
     warner: &mut W,
     root_path: F::PathBuf,
+    mode: OrphanedMode,
 ) -> anyhow::Result<Vec<Group<F>>> {
     let mut scan_stack = vec![root_path];
     let mut groups = vec![];
@@ -72,7 +79,7 @@ pub fn scan_library<F: Fs, W: WarningSender<F::PathBuf>>(
         } else {
             // Recursive scan
             scan_stack.extend(s.dirs);
-            if !s.all_music_files.is_empty() {
+            if mode == OrphanedMode::ShowOrphaned && !s.all_music_files.is_empty() {
                 warner.warn(Warning::OrphanedSongs {
                     folder: dir.clone(),
                     files: s.all_music_files,

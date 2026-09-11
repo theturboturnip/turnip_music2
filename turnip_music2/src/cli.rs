@@ -7,7 +7,7 @@ use crate::{
     },
     export::{ExportContext, FfmpegArgs, build_export_jobs},
     fs::{Fs, FsPathBuf},
-    scanner::{Group, scan_dir, scan_library},
+    scanner::{Group, OrphanedMode, scan_dir, scan_library},
     toml::TomlItemExt,
     util::TitleSortKey,
     warning::{Warning, WarningSender},
@@ -80,17 +80,17 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
     }
 
     /// Reload the library config file and rescan from that
-    pub fn reload_library(&mut self) -> anyhow::Result<()> {
+    pub fn reload_library(&mut self, mode: OrphanedMode) -> anyhow::Result<()> {
         let (_library_doc, library_file) = self.fs.parse_config_file(self.config_path.as_ref())?;
         self.loaded_library = Some(Library {
             config_file: library_file,
             group_files: vec![],
         });
-        self.rescan_library()
+        self.rescan_library(mode)
     }
 
     /// Rescan paths for the existing library file
-    pub fn rescan_library(&mut self) -> anyhow::Result<()> {
+    pub fn rescan_library(&mut self, mode: OrphanedMode) -> anyhow::Result<()> {
         match self.loaded_library.as_mut() {
             Some(l) => {
                 let mut groups = vec![];
@@ -99,6 +99,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                         self.fs,
                         self.warner,
                         self.library_dir.clone().joined(s.as_ref()),
+                        mode,
                     )?);
                 }
                 groups.sort_by_cached_key(|g| g.toml_path.clone());
@@ -158,7 +159,12 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
 
         // Scan library to alert the user where unhandled songs are
         for s in search_paths {
-            scan_library(self.fs, self.warner, self.library_dir.clone().joined(&s))?;
+            scan_library(
+                self.fs,
+                self.warner,
+                self.library_dir.clone().joined(&s),
+                OrphanedMode::ShowOrphaned,
+            )?;
         }
 
         Ok(())
@@ -481,7 +487,7 @@ impl<'a, F: Fs, W: WarningSender<F::PathBuf>> CliContext<'a, F, W> {
                 .write_toml_file(path.joined(user_defined::GroupFile::TOML_FILE_NAME), doc)?
         }
 
-        // TODO rescan
+        self.rescan_library(OrphanedMode::ShowOrphaned)?;
 
         Ok(())
     }

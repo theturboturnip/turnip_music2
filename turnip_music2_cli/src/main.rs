@@ -7,6 +7,7 @@ use turnip_music2::cli::{CliContext, ImportMode};
 use turnip_music2::export::ToOsString;
 use turnip_music2::fs::Fs;
 use turnip_music2::fs::StdFs;
+use turnip_music2::scanner::OrphanedMode;
 use turnip_music2_cli::WarningLogger;
 
 #[derive(Parser)]
@@ -92,27 +93,33 @@ fn main() {
                 folders,
                 formats,
                 native_metadata,
-            } => ctx.import(
-                &folders,
-                formats.as_ref().map(|fs| fs.as_slice()),
-                native_metadata,
-                ImportMode::Album,
-            ),
+            } => || -> anyhow::Result<()> {
+                ctx.reload_library(OrphanedMode::IgnoreOrphaned)?;
+                ctx.import(
+                    &folders,
+                    formats.as_ref().map(|fs| fs.as_slice()),
+                    native_metadata,
+                    ImportMode::Album,
+                )
+            }(),
             Commands::ImportCompilation {
                 folders,
                 formats,
                 native_metadata,
-            } => ctx.import(
-                &folders,
-                formats.as_ref().map(|fs| fs.as_slice()),
-                native_metadata,
-                ImportMode::Compilation,
-            ),
+            } => || -> anyhow::Result<()> {
+                ctx.reload_library(OrphanedMode::IgnoreOrphaned)?;
+                ctx.import(
+                    &folders,
+                    formats.as_ref().map(|fs| fs.as_slice()),
+                    native_metadata,
+                    ImportMode::Compilation,
+                )
+            }(),
             Commands::Update { .. } => todo!(),
             Commands::Edit { .. } => todo!(),
             // Run internal closure to allow bailing if the first step fails
             Commands::Export { config, ffmpeg } => || -> anyhow::Result<()> {
-                ctx.reload_library()?;
+                ctx.reload_library(OrphanedMode::ShowOrphaned)?;
                 let export = ctx.prep_export(&config)?;
 
                 let ffmpeg_path = match ffmpeg {

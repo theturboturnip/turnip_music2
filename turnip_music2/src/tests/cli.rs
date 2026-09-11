@@ -200,7 +200,7 @@ mod import {
     use crate::{
         cli::{CliContext, Library},
         data_model::parsed,
-        scanner::Group,
+        scanner::{Group, OrphanedMode},
     };
 
     /// Test the imports of albums with well-behaved metadata produce usable TOML.
@@ -219,6 +219,7 @@ mod import {
 
         let library = || -> anyhow::Result<Option<Library<_>>> {
             let mut ctx = CliContext::new(None, &mut fs, &mut warner);
+            ctx.reload_library(OrphanedMode::IgnoreOrphaned)?;
             ctx.import(
                 // Add souvenir first, to check that the groups are sorted afterwards
                 &vec![s!("songs/souvenir"), s!("songs/oddfuture")],
@@ -226,7 +227,6 @@ mod import {
                 true,
                 crate::cli::ImportMode::Album,
             )?;
-            ctx.reload_library()?;
             Ok(ctx.loaded_library)
         }();
 
@@ -433,13 +433,13 @@ title = "Track 4"
 
         let library = || -> anyhow::Result<Option<Library<_>>> {
             let mut ctx = CliContext::new(None, &mut fs, &mut warner);
+            ctx.reload_library(OrphanedMode::IgnoreOrphaned)?;
             ctx.import(
                 &vec![s!("songs/unpadded"), s!("songs/zeropadded")],
                 None,
                 true,
                 crate::cli::ImportMode::Album,
             )?;
-            ctx.reload_library()?;
             Ok(ctx.loaded_library)
         }();
 
@@ -623,13 +623,13 @@ title = "11-Fish to the Twenty-First Order"
 
         let library = || -> anyhow::Result<Option<Library<_>>> {
             let mut ctx = CliContext::new(None, &mut fs, &mut warner);
+            ctx.reload_library(OrphanedMode::IgnoreOrphaned)?;
             ctx.import(
                 &vec![s!("songs/deltarune")],
                 None,
                 true,
                 crate::cli::ImportMode::Album,
             )?;
-            ctx.reload_library()?;
             Ok(ctx.loaded_library)
         }();
 
@@ -739,13 +739,13 @@ track = 39
 
         let library = || -> anyhow::Result<Option<Library<_>>> {
             let mut ctx = CliContext::new(None, &mut fs, &mut warner);
+            ctx.reload_library(OrphanedMode::IgnoreOrphaned)?;
             ctx.import(
                 &vec![s!("songs/deltarune")],
                 None,
                 false,
                 crate::cli::ImportMode::Album,
             )?;
-            ctx.reload_library()?;
             Ok(ctx.loaded_library)
         }();
 
@@ -853,13 +853,13 @@ title = "Toby Fox - DELTARUNE Chapter 1 OST - 02 Beginning"
 
         let library = || -> anyhow::Result<Option<Library<_>>> {
             let mut ctx = CliContext::new(None, &mut fs, &mut warner);
+            ctx.reload_library(OrphanedMode::IgnoreOrphaned)?;
             ctx.import(
                 &vec![s!("songs/Big Anime Compilation")],
                 None,
                 true,
                 crate::cli::ImportMode::Compilation,
             )?;
-            ctx.reload_library()?;
             Ok(ctx.loaded_library)
         }();
 
@@ -997,7 +997,7 @@ mod export {
     use std::ffi::OsStr;
 
     use super::*;
-    use crate::cli::CliContext;
+    use crate::{cli::CliContext, scanner::OrphanedMode};
 
     #[test]
     fn dbg_export() {
@@ -1020,6 +1020,7 @@ mod export {
         let export = || -> anyhow::Result<_> {
             let mut ctx = CliContext::new(None, &mut fs, &mut warner);
             ctx.init(vec![s!("songs")], true)?;
+            ctx.reload_library(OrphanedMode::IgnoreOrphaned)?;
             ctx.import(
                 &vec![
                     s!("songs/deltarune"),
@@ -1039,7 +1040,6 @@ mod export {
                 true,
                 crate::cli::ImportMode::Compilation,
             )?;
-            ctx.reload_library()?;
             let export = ctx.prep_export("mp3")?;
 
             ctx.exec_export(export.clone(), OsStr::new("ffmpeg"))?;
