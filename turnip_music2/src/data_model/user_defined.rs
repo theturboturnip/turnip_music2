@@ -102,6 +102,11 @@ pub enum FolderStructure {
     AlbumArtistAlbums,
     /// `artist[0]/album/song`
     ArtistAlbums,
+    /// `album_artist[0]/album/song` if in an album,
+    /// `album_artist[0]/song` if not in an album but still has an album artist,
+    /// `artist[0]/song` if neither album nor album artist but artist,
+    /// `song` if no artist found
+    BestEffort,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]

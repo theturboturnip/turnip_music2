@@ -290,6 +290,21 @@ impl<F: Fs> ExportContext<F> {
                     _ => &[],
                 }
             }
+            // Best effort = if compilation i.e. no album, by first artist; else album_artists->album
+            user_defined::FolderStructure::BestEffort => {
+                match (
+                    &metadata.album,
+                    metadata.album_artists.as_slice(),
+                    metadata.artists.as_slice(),
+                ) {
+                    (Some(album), [album_artist, ..], [..]) => &[album_artist, album],
+                    (Some(album), [], [..]) => &[album],
+                    // Use album_artist for high-level organization before resorting to the artist themselves
+                    (None, [album_artist, ..], [..]) => &[album_artist],
+                    (None, [], [artist, ..]) => &[artist],
+                    (None, [], []) => &[],
+                }
+            }
         };
 
         // Build output directory, being mindful of charset
