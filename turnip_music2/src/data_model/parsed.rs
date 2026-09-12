@@ -189,8 +189,8 @@ impl AlbumFileMeta {
                 t
             }
             None => {
-                let this_t = *curr_track;
-                *curr_track += 1;
+                let this_t = *curr_track + 1;
+                *curr_track = this_t;
                 this_t
             }
         };
